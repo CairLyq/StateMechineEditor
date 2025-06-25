@@ -6,13 +6,19 @@
     <title>状态机编辑器 State Machine Editor</title>
     
     <!-- TailwindCSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="lib/tailwindcss.3.4.16.js"></script>
     
     <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Framer Motion CDN -->
-    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <script src="lib/framer-motion.js"></script>
+    
+    <!-- 分层状态机编辑器模块 -->
+    <script src="js/HierarchicalStateNode.js"></script>
+    <script src="js/HierarchicalTransition.js"></script>
+    <script src="js/HierarchicalRenderer.js"></script>
+    <script src="js/HierarchicalStateMachineEditor.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -253,6 +259,72 @@
             color: #ffffff !important;
             font-weight: 600 !important;
         }
+
+        /* 分层状态机样式 */
+        .hierarchical-state-node {
+            pointer-events: all;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            z-index: 1;
+        }
+
+        .hierarchical-state-node.level-0 {
+            border-width: 3px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .hierarchical-state-node.level-1 {
+            border-width: 2px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .hierarchical-state-node.level-2 {
+            border-width: 1px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .hierarchical-state-node.composite-state {
+            border-style: dashed;
+        }
+
+        .hierarchical-state-node.leaf-state {
+            border-style: solid;
+        }
+
+        .hierarchical-state-node:hover {
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        .expander-button {
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        .expander-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .level-indicator {
+            font-size: 8px;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .hierarchical-transition {
+            pointer-events: all;
+        }
+
+        .hierarchical-transition:hover path {
+            stroke-width: 3;
+            filter: drop-shadow(0 0 4px currentColor);
+        }
+
+        /* 模式切换动画 */
+        .mode-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
     </style>
 </head>
 <body class="min-h-screen" style="background-color: #180536;">
@@ -301,6 +373,14 @@
                             <i class="fas fa-arrow-right text-lg mb-1"></i>
                             <div class="text-xs font-medium">添加转换</div>
                         </button>
+                        <button id="addChildStateBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);">
+                            <i class="fas fa-sitemap text-lg mb-1"></i>
+                            <div class="text-xs font-medium">添加子状态</div>
+                        </button>
+                        <button id="toggleModeBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-secondary);">
+                            <i class="fas fa-layer-group text-lg mb-1"></i>
+                            <div class="text-xs font-medium">分层模式</div>
+                        </button>
                         <button id="simulateBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);">
                             <i class="fas fa-play text-lg mb-1"></i>
                             <div class="text-xs font-medium">模拟运行</div>
@@ -345,7 +425,7 @@
                 </button>
             </div>
 
-            <!-- 状态机画布 -->
+            <!-- 扁平状态机画布 -->
             <div id="canvas" class="w-full h-full canvas-grid relative overflow-hidden cursor-crosshair" style="background-color: rgba(24, 5, 54, 0.6);">
                 <svg id="svgCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;">
                     <defs>
@@ -396,12 +476,34 @@
                                 <feMergeNode in="SourceGraphic"/>
                             </feMerge>
                         </filter>
+                        
+                        <!-- 分层状态机箭头 -->
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#00d4aa" />
+                        </marker>
                     </defs>
                 </svg>
                 
                 <!-- 状态节点容器 -->
                 <div id="statesContainer" class="absolute inset-0 pointer-events-none">
                     <!-- 动态生成状态节点 -->
+                </div>
+            </div>
+
+            <!-- 分层状态机画布 -->
+            <div id="hierarchicalCanvas" class="w-full h-full canvas-grid relative overflow-hidden cursor-crosshair" style="background-color: rgba(24, 5, 54, 0.6); display: none;">
+                <svg id="hierarchicalSvgCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;">
+                    <defs>
+                        <!-- 继承扁平状态机的所有定义 -->
+                        <marker id="hierarchicalArrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#00d4aa" />
+                        </marker>
+                    </defs>
+                </svg>
+                
+                <!-- 分层状态节点容器 -->
+                <div id="hierarchicalStatesContainer" class="absolute inset-0 pointer-events-none">
+                    <!-- 动态生成分层状态节点 -->
                 </div>
             </div>
         </div>

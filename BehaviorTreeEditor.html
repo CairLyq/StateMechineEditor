@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行为树编辑器 Behavior Tree Editor</title>
+    
+    <!-- TailwindCSS CDN -->
+    <script src="lib/tailwindcss.3.4.16.js"></script>
+    
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Framer Motion CDN -->
+    <script src="lib/framer-motion.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            /* Material Design 3 Color System */
+            --md-primary: #180536;
+            --md-primary-container: #3d1960;
+            --md-on-primary: #ffffff;
+            --md-on-primary-container: #e8ddff;
+            
+            --md-secondary: #67089c;
+            --md-secondary-container: #8a2be2;
+            --md-on-secondary: #ffffff;
+            --md-on-secondary-container: #f0e8ff;
+            
+            --md-tertiary: #7c5295;
+            --md-tertiary-container: #9d73b6;
+            --md-on-tertiary: #ffffff;
+            --md-on-tertiary-container: #f5f0ff;
+            
+            --md-surface: rgba(255, 255, 255, 0.12);
+            --md-surface-variant: rgba(255, 255, 255, 0.15);
+            --md-on-surface: #ffffff;
+            --md-on-surface-variant: #f0f0f0;
+            
+            --md-surface-container-lowest: rgba(255, 255, 255, 0.02);
+            --md-surface-container-low: rgba(255, 255, 255, 0.04);
+            --md-surface-container: rgba(255, 255, 255, 0.06);
+            --md-surface-container-high: rgba(255, 255, 255, 0.08);
+            --md-surface-container-highest: rgba(255, 255, 255, 0.12);
+            
+            --md-outline: rgba(147, 143, 153, 0.4);
+            --md-outline-variant: rgba(73, 69, 79, 0.4);
+            
+            --md-error: #ffb4ab;
+            --md-error-container: #93000a;
+            --md-on-error: #690005;
+            --md-on-error-container: #ffdad6;
+            
+            --md-success: #4caf50;
+            --md-success-container: #1b5e20;
+            --md-on-success: #ffffff;
+            --md-on-success-container: #c8e6c9;
+            
+            --md-warning: #ff9800;
+            --md-warning-container: #e65100;
+            --md-on-warning: #ffffff;
+            --md-on-warning-container: #fff3e0;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--md-on-surface);
+        }
+        
+        .behavior-node {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .behavior-node:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(103, 8, 156, 0.3);
+        }
+        
+        .node-connection {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* 画布网格背景 */
+        .canvas-grid {
+            background-image: 
+                /* 粗网格线 (每120px一条，即每10个细网格，主要分割线) */
+                linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                /* 细网格线 (每12px一条，辅助网格) */
+                linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            background-size: 
+                120px 120px,
+                120px 120px,
+                12px 12px,
+                12px 12px;
+            background-position: 
+                0 0,
+                0 0,
+                0 0,
+                0 0;
+        }
+
+        /* 网格跟随缩放和平移 */
+        .canvas-grid-container {
+            background-attachment: local;
+        }
+        
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            background: var(--md-surface-container);
+        }
+        
+        .md-surface {
+            background: var(--md-surface-container);
+            color: var(--md-on-surface);
+            border: 1px solid var(--md-outline-variant);
+        }
+        
+        .md-primary-btn {
+            background: var(--md-primary);
+            color: var(--md-on-primary);
+            border: none;
+        }
+        
+        .md-primary-btn:hover {
+            background: var(--md-primary-container);
+            box-shadow: 0 4px 12px rgba(24, 5, 54, 0.4);
+        }
+        
+        .md-secondary-btn {
+            background: var(--md-secondary);
+            color: var(--md-on-secondary);
+            border: none;
+        }
+        
+        .md-secondary-btn:hover {
+            background: var(--md-secondary-container);
+            box-shadow: 0 4px 12px rgba(103, 8, 156, 0.4);
+        }
+        
+        .md-surface-variant {
+            background: var(--md-surface-variant);
+            color: var(--md-on-surface-variant);
+        }
+        
+        /* 提高输入框对比度 */
+        input[type="text"], input[type="range"], textarea, select {
+            background: rgba(255, 255, 255, 0.9) !important;
+            color: #1a1a1a !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        }
+        
+        input[type="text"]:focus, textarea:focus, select:focus {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #000000 !important;
+            border: 2px solid #4caf50 !important;
+            outline: none !important;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .tool-btn {
+            transition: all 0.2s ease;
+        }
+        
+        .tool-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .status-indicator {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .log-panel {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        
+        /* 右键菜单样式 */
+        .context-menu {
+            position: fixed;
+            z-index: 9999;
+            background: var(--md-surface-container-high);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            min-width: 200px;
+            max-width: 280px;
+            overflow: hidden;
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+        
+        .context-menu.show {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: all;
+        }
+        
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            color: var(--md-on-surface);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .context-menu-item:hover {
+            background: var(--md-surface-container-highest);
+            color: var(--md-primary);
+        }
+        
+        .context-menu-item:active {
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+        }
+        
+        .context-menu-item.disabled {
+            color: var(--md-outline);
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .context-menu-item.disabled:hover {
+            background: none;
+            color: var(--md-outline);
+        }
+        
+        .context-menu-item.danger:hover {
+            background: var(--md-error-container);
+            color: var(--md-on-error-container);
+        }
+        
+        .context-menu-separator {
+            height: 1px;
+            background: var(--md-outline-variant);
+            margin: 4px 0;
+        }
+        
+        .context-menu-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .context-menu-text {
+            flex: 1;
+        }
+        
+        .context-menu-shortcut {
+            color: var(--md-outline);
+            font-size: 12px;
+            margin-left: 12px;
+        }
+        
+        .context-menu-submenu {
+            position: relative;
+        }
+        
+        .context-menu-submenu::after {
+            content: '\f054';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 10px;
+            color: var(--md-outline);
+            margin-left: auto;
+        }
+        
+        /* 子菜单 */
+        .context-submenu {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            background: var(--md-surface-container-high);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            min-width: 180px;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+        
+        .context-menu-submenu:hover .context-submenu {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: all;
+        }
+    </style>
+</head>
+<body class="min-h-screen" style="background-color: #180536;">
+    <!-- 顶部导航栏 -->
+    <nav class="md-surface backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold" style="color: var(--md-on-surface);">行为树编辑器</h1>
+                    <span class="text-sm" style="color: var(--md-on-surface-variant);">Behavior Tree Editor</span>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <button id="undoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                    <button id="redoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
+                    <button id="importBtn" class="md-surface-variant px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface);">
+                        <i class="fas fa-upload mr-2"></i>导入 Import
+                    </button>
+                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
+                    <button id="exportBtn" class="md-primary-btn px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-download mr-2"></i>导出 Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex h-screen">
+        <!-- 左侧工具栏 -->
+        <div class="w-64 md-surface backdrop-blur-md p-4">
+            <div class="space-y-6">
+                <!-- 工具箱 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">工具箱</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="tool-btn md-secondary-btn p-3 rounded-lg transition-all duration-200" data-node-type="selector">
+                            <i class="fas fa-code-branch text-lg mb-1"></i>
+                            <div class="text-xs font-medium">选择器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-success);" data-node-type="sequence">
+                            <i class="fas fa-list-ol text-lg mb-1"></i>
+                            <div class="text-xs font-medium">序列器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);" data-node-type="parallel">
+                            <i class="fas fa-grip-lines text-lg mb-1"></i>
+                            <div class="text-xs font-medium">并行器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-warning);" data-node-type="inverter">
+                            <i class="fas fa-exchange-alt text-lg mb-1"></i>
+                            <div class="text-xs font-medium">反转器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-secondary);" data-node-type="action">
+                            <i class="fas fa-play text-lg mb-1"></i>
+                            <div class="text-xs font-medium">动作节点</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);" data-node-type="condition">
+                            <i class="fas fa-question-circle text-lg mb-1"></i>
+                            <div class="text-xs font-medium">条件节点</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 节点列表 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">节点列表</h3>
+                    <div id="nodesList" class="space-y-2 max-h-64 overflow-y-auto">
+                        <!-- 动态生成节点列表 -->
+                    </div>
+                </div>
+
+                <!-- 属性面板 -->
+                <div id="propertiesPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">属性面板</h3>
+                    <div id="selectedNodeInfo" class="text-sm" style="color: var(--md-on-surface-variant);">
+                        点击节点查看属性
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主编辑区域 -->
+        <div class="flex-1 relative">
+            <!-- 画布工具栏 -->
+            <div class="absolute top-4 left-4 z-10 flex space-x-2">
+                <button id="zoomInBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button id="zoomOutBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button id="fitBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button id="deleteBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-error);">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+
+            <!-- 行为树画布 -->
+            <div id="canvas" class="w-full h-full canvas-grid relative overflow-hidden cursor-crosshair" style="background-color: rgba(24, 5, 54, 0.6);">
+                <canvas id="behaviorTreeCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;"></canvas>
+                
+                <!-- 节点容器 -->
+                <div id="nodesContainer" class="absolute inset-0 pointer-events-none">
+                    <!-- 动态生成节点 -->
+                </div>
+            </div>
+
+            <!-- 执行状态指示器 -->
+            <div id="executionStatus" class="absolute top-4 right-4 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-3 border-l-4 border-green-500">
+                    <div class="flex items-center">
+                        <div class="status-indicator w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                        <span class="text-sm font-medium" style="color: var(--md-on-surface);">正在执行...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧信息面板 -->
+        <div class="w-80 md-surface backdrop-blur-md p-4">
+            <div class="space-y-6">
+                <!-- 统计信息 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">统计信息</h3>
+                    <div class="md-surface-variant rounded-lg p-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #4CAF50;" id="totalNodes">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">节点总数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #FF9800;" id="treeDepth">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">树深度</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行控制 -->
+                <div id="executionPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">执行控制</h3>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="playBtn" class="md-secondary-btn p-2 rounded-lg transition-colors">
+                                <i class="fas fa-play text-sm mr-1"></i>
+                                <span class="text-xs">运行</span>
+                            </button>
+                            <button id="pauseBtn" class="md-surface-variant p-2 rounded-lg transition-colors" style="color: var(--md-warning);">
+                                <i class="fas fa-pause text-sm mr-1"></i>
+                                <span class="text-xs">暂停</span>
+                            </button>
+                            <button id="stopBtn" class="md-surface-variant p-2 rounded-lg transition-colors" style="color: var(--md-error);">
+                                <i class="fas fa-stop text-sm mr-1"></i>
+                                <span class="text-xs">停止</span>
+                            </button>
+                            <button id="stepBtn" class="md-surface-variant p-2 rounded-lg transition-colors" style="color: var(--md-tertiary);">
+                                <i class="fas fa-step-forward text-sm mr-1"></i>
+                                <span class="text-xs">单步</span>
+                            </button>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">执行状态</label>
+                            <div id="executionState" class="md-surface px-3 py-2 rounded text-sm">未开始</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">执行速度</label>
+                            <input id="speedControl" type="range" min="0.1" max="2" step="0.1" value="1" class="w-full">
+                            <div class="text-xs text-center mt-1" style="color: var(--md-on-surface-variant);" id="speedValue">1.0x</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 属性面板 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">节点属性</h3>
+                    <div id="nodePropertiesSection" class="md-surface-variant rounded-lg p-4">
+                        <div class="text-center text-sm" style="color: var(--md-on-surface-variant);">
+                            <i class="fas fa-mouse-pointer text-2xl mb-2"></i>
+                            <p>选择节点查看属性</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行日志 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">执行日志</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <button id="clearLogBtn" class="text-xs transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                            <i class="fas fa-trash mr-1"></i>清空日志
+                        </button>
+                    </div>
+                    <div id="executionLog" class="log-panel h-48 p-3 rounded-lg text-xs overflow-y-auto">
+                        <div class="text-green-400">行为树编辑器已就绪...</div>
+                    </div>
+                </div>
+
+                <!-- 黑板数据 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">黑板数据</h3>
+                    <div id="blackboardDataSection" class="md-surface-variant rounded-lg p-3 h-32 overflow-y-auto text-sm">
+                        <div class="text-center" style="color: var(--md-on-surface-variant);">
+                            暂无数据
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 模态框 -->
+    <div id="modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+        <div class="md-surface rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="modalTitle" class="text-lg font-semibold" style="color: var(--md-on-surface);"></h3>
+                    <button id="closeModal" class="transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="modalContent">
+                    <!-- 动态内容 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 文件输入（隐藏） -->
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+    
+    <!-- 加载脚本 -->
+    <script src="js/behaviorTree/BehaviorTreeNode.js"></script>
+    <script src="js/behaviorTree/BehaviorTreeRenderer.js"></script>
+    <script src="js/behaviorTree/BehaviorTreeSimulator.js"></script>
+    <script src="js/behaviorTree/BehaviorTreeEditor.js"></script>
+    
+    <script>
+        // 初始化编辑器
+        let editor;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // 创建编辑器实例
+            editor = new BehaviorTreeEditor('behaviorTreeCanvas', {
+                gridSize: 20,
+                snapToGrid: true,
+                showGrid: true,
+                debug: false
+            });
+            
+            setupUI();
+            setupEventListeners();
+            
+            console.log('行为树编辑器初始化完成');
+        });
+        
+        function setupUI() {
+            // 设置节点按钮
+            document.querySelectorAll('[data-node-type]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const nodeType = this.dataset.nodeType;
+                    addNodeAtCenter(nodeType);
+                });
+            });
+            
+            // 更新界面状态
+            updateUI();
+        }
+        
+        function setupEventListeners() {
+            // 行为树日志监听
+            window.addEventListener('behaviorTreeLog', function(event) {
+                addLogEntry(event.detail);
+            });
+            
+            // 执行速度滑块
+            document.getElementById('speedControl').addEventListener('input', function() {
+                const speed = parseFloat(this.value);
+                document.getElementById('speedValue').textContent = speed.toFixed(1) + 'x';
+                if (editor && editor.simulator) {
+                    editor.simulator.setExecutionSpeed(speed);
+                }
+            });
+            
+            // 清空日志
+            document.getElementById('clearLogBtn').addEventListener('click', function() {
+                document.getElementById('executionLog').innerHTML = '<div class="text-green-400">日志已清空...</div>';
+            });
+            
+            // 执行控制按钮
+            document.getElementById('playBtn').addEventListener('click', function() {
+                if (editor && editor.simulator) {
+                    editor.simulator.start();
+                    updateExecutionState('运行中');
+                }
+            });
+            
+            document.getElementById('pauseBtn').addEventListener('click', function() {
+                if (editor && editor.simulator) {
+                    editor.simulator.pause();
+                    updateExecutionState('已暂停');
+                }
+            });
+            
+            document.getElementById('stopBtn').addEventListener('click', function() {
+                if (editor && editor.simulator) {
+                    editor.simulator.stop();
+                    updateExecutionState('已停止');
+                }
+            });
+            
+            document.getElementById('stepBtn').addEventListener('click', function() {
+                if (editor && editor.simulator) {
+                    editor.simulator.step();
+                    updateExecutionState('单步执行');
+                }
+            });
+            
+            // 画布工具栏
+            document.getElementById('zoomInBtn').addEventListener('click', function() {
+                if (editor) editor.zoomIn();
+            });
+            
+            document.getElementById('zoomOutBtn').addEventListener('click', function() {
+                if (editor) editor.zoomOut();
+            });
+            
+            document.getElementById('fitBtn').addEventListener('click', function() {
+                if (editor) editor.fitToScreen();
+            });
+            
+            document.getElementById('deleteBtn').addEventListener('click', function() {
+                if (editor) editor.deleteSelected();
+            });
+            
+            // 导入导出
+            document.getElementById('importBtn').addEventListener('click', function() {
+                document.getElementById('fileInput').click();
+            });
+            
+            document.getElementById('exportBtn').addEventListener('click', function() {
+                if (editor) {
+                    const data = editor.exportTree();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'behavior_tree.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            });
+            
+            // 撤销重做
+            document.getElementById('undoBtn').addEventListener('click', function() {
+                if (editor) editor.undo();
+            });
+            
+            document.getElementById('redoBtn').addEventListener('click', function() {
+                if (editor) editor.redo();
+            });
+            
+            // 文件导入
+            document.getElementById('fileInput').addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            editor.importTree(data);
+                            updateUI();
+                        } catch (error) {
+                            alert('文件格式错误：' + error.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+                this.value = '';
+            });
+            
+            // 定期更新统计信息
+            setInterval(updateUI, 1000);
+        }
+        
+        function addNodeAtCenter(nodeType) {
+            if (!editor) return;
+            
+            const canvas = document.getElementById('behaviorTreeCanvas');
+            const centerX = (canvas.width / 2 - editor.viewport.x) / editor.viewport.zoom;
+            const centerY = (canvas.height / 2 - editor.viewport.y) / editor.viewport.zoom;
+            
+            editor.addNode(nodeType, centerX, centerY);
+            updateUI();
+        }
+        
+        function updateUI() {
+            if (!editor) return;
+            
+            // 更新节点统计
+            const nodeCount = editor.tree.nodes ? editor.tree.nodes.size : 0;
+            document.getElementById('totalNodes').textContent = nodeCount;
+            
+            // 计算树深度
+            const depth = calculateTreeDepth();
+            document.getElementById('treeDepth').textContent = depth;
+            
+            // 更新节点列表
+            updateNodesList();
+            
+            // 更新黑板数据
+            updateBlackboard();
+        }
+        
+        function calculateTreeDepth() {
+            if (!editor || !editor.tree.rootNode) return 0;
+            
+            function getDepth(node) {
+                if (!node || !node.children || node.children.length === 0) return 1;
+                return 1 + Math.max(...node.children.map(child => getDepth(child)));
+            }
+            
+            return getDepth(editor.tree.rootNode);
+        }
+        
+        function updateNodesList() {
+            if (!editor || !editor.tree.nodes) return;
+            
+            const listDiv = document.getElementById('nodesList');
+            let html = '';
+            
+            editor.tree.nodes.forEach((node, id) => {
+                const isSelected = editor.selectedNodes.has(id);
+                html += `
+                    <div class="node-list-item p-2 rounded ${isSelected ? 'md-secondary-btn' : 'md-surface-variant'} cursor-pointer transition-colors" data-node-id="${id}">
+                        <div class="flex items-center">
+                            <i class="fas ${getNodeIcon(node.type)} mr-2"></i>
+                            <div>
+                                <div class="text-sm font-medium">${node.name || node.type}</div>
+                                <div class="text-xs opacity-75">${getNodeTypeLabel(node.type)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            listDiv.innerHTML = html || '<div class="text-center text-sm opacity-50">暂无节点</div>';
+            
+            // 添加点击事件
+            listDiv.querySelectorAll('.node-list-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const nodeId = this.dataset.nodeId;
+                    if (editor.tree.nodes.has(nodeId)) {
+                        editor.selectNode(nodeId);
+                        updateUI();
+                    }
+                });
+            });
+        }
+        
+        function updateBlackboard() {
+            if (!editor || !editor.simulator) return;
+            
+            const blackboard = editor.simulator.getBlackboard();
+            const blackboardDiv = document.getElementById('blackboardDataSection');
+            
+            if (blackboard.size === 0) {
+                blackboardDiv.innerHTML = '<div class="text-center" style="color: var(--md-on-surface-variant);">暂无数据</div>';
+            } else {
+                let html = '';
+                blackboard.forEach((value, key) => {
+                    html += `<div class="flex justify-between py-1 border-b border-gray-100 last:border-b-0">
+                        <span class="font-mono text-xs" style="color: var(--md-on-surface);">${key}:</span>
+                        <span class="font-mono text-xs" style="color: var(--md-secondary);">${JSON.stringify(value)}</span>
+                    </div>`;
+                });
+                blackboardDiv.innerHTML = html;
+            }
+        }
+        
+        function updateExecutionState(state) {
+            document.getElementById('executionState').textContent = state;
+        }
+        
+        function getNodeIcon(type) {
+            const icons = {
+                selector: 'fa-code-branch',
+                sequence: 'fa-list-ol',
+                parallel: 'fa-grip-lines',
+                inverter: 'fa-exchange-alt',
+                repeater: 'fa-redo',
+                timeout: 'fa-clock',
+                action: 'fa-play',
+                condition: 'fa-question-circle',
+                wait: 'fa-pause',
+                log: 'fa-file-alt'
+            };
+            return icons[type] || 'fa-circle';
+        }
+        
+        function getNodeTypeLabel(type) {
+            const labels = {
+                selector: 'Selector',
+                sequence: 'Sequence',
+                parallel: 'Parallel',
+                inverter: 'Inverter',
+                repeater: 'Repeater',
+                timeout: 'Timeout',
+                action: 'Action',
+                condition: 'Condition',
+                wait: 'Wait',
+                log: 'Log'
+            };
+            return labels[type] || type;
+        }
+        
+        function addLogEntry(logEntry) {
+            const logDiv = document.getElementById('executionLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry text-${getLogColor(logEntry.type)}`;
+            entry.innerHTML = `[${logEntry.timestamp}] ${logEntry.message}`;
+            
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            // 限制日志条目数量
+            while (logDiv.children.length > 100) {
+                logDiv.removeChild(logDiv.firstChild);
+            }
+        }
+        
+        function getLogColor(type) {
+            const colors = {
+                info: 'green-400',
+                error: 'red-400',
+                debug: 'yellow-400',
+                action: 'blue-400'
+            };
+            return colors[type] || 'white';
+        }
+        
+        // 导出给全局使用
+        window.BehaviorTreeEditorUI = {
+            editor,
+            updateUI,
+            addLogEntry,
+            updateExecutionState
+        };
+    </script>
+
+    <!-- 右键菜单 -->
+    <div id="contextMenu" class="context-menu">
+        <!-- 动态生成菜单项 -->
+    </div>
+
+</body>
+</html>

@@ -21,9 +21,16 @@ class StateMachineEditor {
             previewLine: null
         };
 
+        // 分层状态机编辑器
+        this.hierarchicalEditor = null;
+        this.isHierarchicalMode = false;
+
         // 调试信息
         this.debugMode = true;
         this.debugLog = [];
+        
+        // 性能优化相关
+        this.transitionUpdateTimer = null;
 
         this.init();
         this.log('StateMachineEditor 初始化完成');
@@ -35,6 +42,9 @@ class StateMachineEditor {
         this.updateUI();
         this.createDebugPanel();
         this.updateGridBackground();
+        
+        // 初始化分层状态机编辑器
+        this.initHierarchicalEditor();
     }
 
     log(message) {
@@ -107,6 +117,8 @@ class StateMachineEditor {
         // 工具按钮事件
         document.getElementById('addStateBtn').addEventListener('click', () => this.addState());
         document.getElementById('addTransitionBtn').addEventListener('click', () => this.toggleTransitionMode());
+        document.getElementById('addChildStateBtn').addEventListener('click', () => this.addChildState());
+        document.getElementById('toggleModeBtn').addEventListener('click', () => this.toggleHierarchicalMode());
         document.getElementById('simulateBtn').addEventListener('click', () => this.toggleSimulation());
         document.getElementById('resetBtn').addEventListener('click', () => this.reset());
 
@@ -129,6 +141,7 @@ class StateMachineEditor {
         canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
         canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
         canvas.addEventListener('wheel', (e) => this.onWheel(e));
+        canvas.addEventListener('contextmenu', (e) => this.onCanvasContextMenu(e)); // 添加右键菜单
 
         // 模拟控制事件
         document.getElementById('triggerEventBtn').addEventListener('click', () => this.triggerEvent());
@@ -149,6 +162,36 @@ class StateMachineEditor {
                 !e.target.matches('input, textarea')) {
                 e.preventDefault();
                 this.deleteSelectedElement();
+            }
+            
+            // 快捷键支持
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            this.redo();
+                        } else {
+                            this.undo();
+                        }
+                        break;
+                    case 'y':
+                        e.preventDefault();
+                        this.redo();
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        this.selectAllStates();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        this.exportStateMachine();
+                        break;
+                    case 'o':
+                        e.preventDefault();
+                        this.importStateMachine();
+                        break;
+                }
             }
         });
     }
@@ -334,6 +377,7 @@ class StateMachineEditor {
     makeDraggable(element, state) {
         let isDragging = false;
         let startX, startY, initialX, initialY;
+        let animationFrame = null;
 
         element.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
@@ -352,30 +396,64 @@ class StateMachineEditor {
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
 
-            const deltaX = (e.clientX - startX) / this.zoom;
-            const deltaY = (e.clientY - startY) / this.zoom;
+            // 取消之前的动画帧
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
 
-            state.x = initialX + deltaX;
-            state.y = initialY + deltaY;
+            // 使用requestAnimationFrame进行平滑更新
+            animationFrame = requestAnimationFrame(() => {
+                const deltaX = (e.clientX - startX) / this.zoom;
+                const deltaY = (e.clientY - startY) / this.zoom;
 
-            // 立即更新状态位置
-            element.style.left = `${state.x}px`;
-            element.style.top = `${state.y}px`;
+                state.x = initialX + deltaX;
+                state.y = initialY + deltaY;
 
-            this.updateTransitionsForState(state.id);
+                // 直接使用 left/top 进行位置更新，确保坐标一致性
+                element.style.left = `${state.x}px`;
+                element.style.top = `${state.y}px`;
+
+                // 延迟更新转换以避免频繁重绘
+                this.scheduleTransitionUpdate(state.id);
+            });
         });
 
         document.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
 
+                // 取消待处理的动画帧
+                if (animationFrame) {
+                    cancelAnimationFrame(animationFrame);
+                    animationFrame = null;
+                }
+
                 // 恢复transition
                 element.style.transition = '';
+                
+                // 确保最终位置正确
+                element.style.left = `${state.x}px`;
+                element.style.top = `${state.y}px`;
 
                 this.updateTransitionsForState(state.id);
                 this.saveToHistory('移动状态');
             }
         });
+    }
+
+    /**
+     * 调度转换更新（防抖）
+     */
+    scheduleTransitionUpdate(stateId) {
+        // 清除之前的定时器
+        if (this.transitionUpdateTimer) {
+            clearTimeout(this.transitionUpdateTimer);
+        }
+        
+        // 延迟更新转换
+        this.transitionUpdateTimer = setTimeout(() => {
+            this.updateTransitionsForState(stateId);
+        }, 16); // 约60FPS
     }
 
     selectState(state) {
@@ -1760,11 +1838,60 @@ class StateMachineEditor {
         this.updateZoom();
     }
 
+    /**
+     * 改进的适应屏幕功能
+     */
     fitToScreen() {
-        this.zoom = 1;
-        this.panX = 0;
-        this.panY = 0;
+        if (this.states.size === 0) {
+            // 如果没有状态，重置到默认视图
+            this.zoom = 1;
+            this.panX = 0;
+            this.panY = 0;
+            this.updateZoom();
+            return;
+        }
+
+        // 计算所有状态的边界框
+        const states = Array.from(this.states.values());
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+
+        states.forEach(state => {
+            const nodeSize = 80; // 节点直径
+            minX = Math.min(minX, state.x);
+            minY = Math.min(minY, state.y);
+            maxX = Math.max(maxX, state.x + nodeSize);
+            maxY = Math.max(maxY, state.y + nodeSize);
+        });
+
+        // 计算边界框的尺寸
+        const contentWidth = maxX - minX;
+        const contentHeight = maxY - minY;
+        const contentCenterX = (minX + maxX) / 2;
+        const contentCenterY = (minY + maxY) / 2;
+
+        // 获取画布尺寸
+        const canvas = document.getElementById('canvas');
+        const rect = canvas.getBoundingClientRect();
+        const canvasWidth = rect.width;
+        const canvasHeight = rect.height;
+
+        // 计算缩放比例，留出边距
+        const margin = 100; // 边距
+        const scaleX = (canvasWidth - margin * 2) / contentWidth;
+        const scaleY = (canvasHeight - margin * 2) / contentHeight;
+        
+        // 选择较小的缩放比例确保内容完全可见，但限制在合理范围内
+        this.zoom = Math.max(0.3, Math.min(2, Math.min(scaleX, scaleY)));
+
+        // 计算平移量以使内容居中
+        this.panX = (canvasWidth / 2) / this.zoom - contentCenterX;
+        this.panY = (canvasHeight / 2) / this.zoom - contentCenterY;
+
+        // 应用变换
         this.updateZoom();
+        
+        console.log(`视图已适应屏幕 - 缩放: ${this.zoom.toFixed(2)}, 平移: (${this.panX.toFixed(0)}, ${this.panY.toFixed(0)})`);
     }
 
     updateZoom() {
@@ -1891,6 +2018,707 @@ class StateMachineEditor {
             this.updateStateElement(lastState);
         }
         this.updateTransitions();
+    }
+
+    // ==================== 分层状态机功能 ====================
+
+    /**
+     * 初始化分层状态机编辑器
+     */
+    initHierarchicalEditor() {
+        try {
+            this.hierarchicalEditor = new HierarchicalStateMachineEditor('hierarchicalCanvas', 'hierarchicalSvgCanvas');
+            this.log('分层状态机编辑器初始化成功');
+        } catch (error) {
+            this.log('分层状态机编辑器初始化失败: ' + error.message);
+            console.error('分层状态机编辑器初始化失败:', error);
+        }
+    }
+
+    /**
+     * 切换分层状态机模式
+     */
+    toggleHierarchicalMode() {
+        this.isHierarchicalMode = !this.isHierarchicalMode;
+        
+        const toggleBtn = document.getElementById('toggleModeBtn');
+        const flatCanvas = document.getElementById('canvas');
+        const hierarchicalCanvas = document.getElementById('hierarchicalCanvas');
+        
+        if (this.isHierarchicalMode) {
+            // 切换到分层模式
+            toggleBtn.innerHTML = '<i class="fas fa-list text-lg mb-1"></i><div class="text-xs font-medium">扁平模式</div>';
+            toggleBtn.style.color = 'var(--md-success)';
+            
+            // 隐藏扁平编辑器
+            flatCanvas.style.display = 'none';
+            
+            // 显示分层编辑器
+            hierarchicalCanvas.style.display = 'block';
+            
+            // 如果分层编辑器存在，重新渲染
+            if (this.hierarchicalEditor) {
+                this.hierarchicalEditor.render();
+            }
+            
+            this.log('切换到分层状态机模式');
+        } else {
+            // 切换到扁平模式
+            toggleBtn.innerHTML = '<i class="fas fa-layer-group text-lg mb-1"></i><div class="text-xs font-medium">分层模式</div>';
+            toggleBtn.style.color = 'var(--md-secondary)';
+            
+            // 显示扁平编辑器
+            flatCanvas.style.display = 'block';
+            
+            // 隐藏分层编辑器
+            hierarchicalCanvas.style.display = 'none';
+            
+            this.log('切换到扁平状态机模式');
+        }
+        
+        this.updateUI();
+    }
+
+    /**
+     * 添加子状态
+     */
+    addChildState() {
+        if (!this.isHierarchicalMode) {
+            alert('请先切换到分层模式');
+            return;
+        }
+        
+        if (!this.hierarchicalEditor) {
+            alert('分层编辑器未初始化');
+            return;
+        }
+        
+        // 如果有选中的节点，在其下创建子状态
+        if (this.hierarchicalEditor.selectedNode) {
+            const parentId = this.hierarchicalEditor.selectedNode.id;
+            this.hierarchicalEditor.addChildNode(parentId, '新子状态');
+            this.log(`为节点 ${this.hierarchicalEditor.selectedNode.name} 添加子状态`);
+        } else {
+            // 否则创建根状态
+            this.hierarchicalEditor.addRootNode('新根状态', 100, 100);
+            this.log('添加新根状态');
+        }
+    }
+
+    /**
+     * 获取当前编辑器状态
+     */
+    getCurrentEditor() {
+        return this.isHierarchicalMode ? this.hierarchicalEditor : this;
+    }
+
+    /**
+     * 导出状态机数据（支持分层和扁平）
+     */
+    exportStateMachine() {
+        let data;
+        
+        if (this.isHierarchicalMode && this.hierarchicalEditor) {
+            // 导出分层状态机数据
+            data = this.hierarchicalEditor.toJSON();
+        } else {
+            // 导出扁平状态机数据
+            data = {
+                states: Array.from(this.states.values()),
+                transitions: this.transitions,
+                metadata: {
+                    created: new Date().toISOString(),
+                    version: '1.0.0',
+                    name: '状态机导出',
+                    type: 'flat-state-machine'
+                }
+            };
+        }
+
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `state-machine-${this.isHierarchicalMode ? 'hierarchical' : 'flat'}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        this.addToHistory('导出状态机');
+        this.log(`导出${this.isHierarchicalMode ? '分层' : '扁平'}状态机`);
+    }
+
+    /**
+     * 导入状态机数据（自动识别分层或扁平）
+     */
+    loadStateMachineData(data) {
+        try {
+            // 检查是否为分层状态机数据
+            if (data.metadata && data.metadata.type === 'hierarchical-state-machine') {
+                // 切换到分层模式
+                if (!this.isHierarchicalMode) {
+                    this.toggleHierarchicalMode();
+                }
+                
+                // 加载分层状态机数据
+                if (this.hierarchicalEditor) {
+                    this.hierarchicalEditor.loadFromJSON(data);
+                    this.log('成功导入分层状态机数据');
+                } else {
+                    throw new Error('分层编辑器未初始化');
+                }
+            } else {
+                // 切换到扁平模式
+                if (this.isHierarchicalMode) {
+                    this.toggleHierarchicalMode();
+                }
+                
+                // 加载扁平状态机数据（原有逻辑）
+                this.states.clear();
+                this.transitions = [];
+                
+                // 清理SVG
+                const svg = document.getElementById('svgCanvas');
+                const statesContainer = document.getElementById('statesContainer');
+                svg.innerHTML = `
+                    <defs>
+                        <!-- 保留原有的SVG定义 -->
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#00d4aa" />
+                        </marker>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge> 
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                `;
+                statesContainer.innerHTML = '';
+                
+                // 加载状态
+                if (data.states) {
+                    for (const stateData of data.states) {
+                        this.states.set(stateData.id, stateData);
+                        this.createStateElement(stateData);
+                    }
+                }
+                
+                // 加载转换
+                if (data.transitions) {
+                    this.transitions = data.transitions;
+                }
+                
+                this.log('成功导入扁平状态机数据');
+            }
+            
+            // 更新界面
+            this.updateUI();
+            this.saveToHistory('导入状态机');
+            
+            // 显示导入成功信息
+            const statesCount = this.isHierarchicalMode ? 
+                (this.hierarchicalEditor ? this.hierarchicalEditor.allNodes.size : 0) : 
+                this.states.size;
+            const transitionsCount = this.isHierarchicalMode ? 
+                (this.hierarchicalEditor ? this.hierarchicalEditor.transitionManager.getAllTransitions().length : 0) : 
+                this.transitions.length;
+            const metadata = data.metadata || {};
+            
+            alert(`导入成功！\n类型：${this.isHierarchicalMode ? '分层状态机' : '扁平状态机'}\n状态数量：${statesCount}\n转换数量：${transitionsCount}\n${metadata.name ? '名称：' + metadata.name : ''}\n${metadata.created ? '创建时间：' + new Date(metadata.created).toLocaleString() : ''}`);
+            
+        } catch (error) {
+            alert('导入失败：' + error.message);
+            console.error('导入错误：', error);
+            this.log('导入失败: ' + error.message);
+        }
+    }
+
+    /**
+     * 画布右键菜单处理
+     */
+    onCanvasContextMenu(e) {
+        // 如果点击在状态节点上，不显示画布菜单
+        if (e.target.closest('.state-node')) {
+            return;
+        }
+
+        e.preventDefault();
+        this.showCanvasContextMenu(e);
+    }
+
+    /**
+     * 显示画布右键菜单
+     */
+    showCanvasContextMenu(event) {
+        console.log(`显示画布右键菜单 - 位置: (${event.clientX}, ${event.clientY})`);
+
+        // 移除已存在的右键菜单
+        this.hideContextMenu();
+
+        const menu = document.createElement('div');
+        menu.id = 'contextMenu';
+        menu.className = 'fixed bg-white border border-gray-300 rounded-lg shadow-lg py-2 z-50';
+        menu.style.minWidth = '180px';
+
+        // 计算菜单位置，防止超出屏幕
+        const menuWidth = 180;
+        const menuHeight = 320;
+        let left = event.clientX;
+        let top = event.clientY;
+
+        if (left + menuWidth > window.innerWidth) {
+            left = event.clientX - menuWidth;
+        }
+
+        if (top + menuHeight > window.innerHeight) {
+            top = event.clientY - menuHeight;
+        }
+
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+
+        // 计算添加状态的位置（相对于画布）
+        const canvas = document.getElementById('canvas');
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = (event.clientX - rect.left - this.panX) / this.zoom;
+        const canvasY = (event.clientY - rect.top - this.panY) / this.zoom;
+
+        menu.innerHTML = `
+            <div class="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-200 mb-1">添加内容</div>
+            <div class="context-menu-item px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-plus-circle mr-3 text-blue-500"></i>添加状态
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-green-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-play mr-3 text-green-500"></i>创建示例状态机
+            </div>
+            
+            <div class="border-t border-gray-200 my-1"></div>
+            <div class="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">编辑操作</div>
+            <div class="context-menu-item px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center ${this.historyIndex <= 0 ? 'opacity-50 cursor-not-allowed' : ''}">
+                <i class="fas fa-undo mr-3 text-gray-500"></i>撤销 <span class="ml-auto text-xs text-gray-400">Ctrl+Z</span>
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center ${this.historyIndex >= this.history.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}">
+                <i class="fas fa-redo mr-3 text-gray-500"></i>重做 <span class="ml-auto text-xs text-gray-400">Ctrl+Y</span>
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-purple-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-mouse-pointer mr-3 text-purple-500"></i>全选状态 <span class="ml-auto text-xs text-gray-400">Ctrl+A</span>
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-orange-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-project-diagram mr-3 text-orange-500"></i>自动布局
+            </div>
+
+            <div class="border-t border-gray-200 my-1"></div>
+            <div class="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">视图控制</div>
+            <div class="context-menu-item px-4 py-2 hover:bg-indigo-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-search-plus mr-3 text-indigo-500"></i>放大视图
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-indigo-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-search-minus mr-3 text-indigo-500"></i>缩小视图
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-teal-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-expand-arrows-alt mr-3 text-teal-500"></i>适应屏幕
+            </div>
+
+            <div class="border-t border-gray-200 my-1"></div>
+            <div class="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">文件操作</div>
+            <div class="context-menu-item px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-download mr-3 text-blue-500"></i>导出状态机 <span class="ml-auto text-xs text-gray-400">Ctrl+S</span>
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-green-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-upload mr-3 text-green-500"></i>导入状态机 <span class="ml-auto text-xs text-gray-400">Ctrl+O</span>
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-yellow-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-camera mr-3 text-yellow-500"></i>保存为图片
+            </div>
+
+            <div class="border-t border-gray-200 my-1"></div>
+            <div class="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">其他功能</div>
+            <div class="context-menu-item px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-700 transition-colors flex items-center">
+                <i class="fas fa-chart-bar mr-3 text-gray-500"></i>查看统计信息
+            </div>
+            <div class="context-menu-item px-4 py-2 hover:bg-red-50 cursor-pointer text-sm text-red-600 transition-colors flex items-center">
+                <i class="fas fa-trash mr-3 text-red-500"></i>清空画布
+            </div>
+        `;
+
+        // 添加菜单项事件
+        const menuItems = menu.querySelectorAll('.context-menu-item');
+        
+        // 添加状态
+        menuItems[0].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.addState(canvasX, canvasY);
+            this.hideContextMenu();
+        });
+
+        // 创建示例状态机
+        menuItems[1].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.createSampleStates();
+            this.hideContextMenu();
+        });
+
+        // 撤销
+        menuItems[2].addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.historyIndex > 0) {
+                this.undo();
+            }
+            this.hideContextMenu();
+        });
+
+        // 重做
+        menuItems[3].addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.historyIndex < this.history.length - 1) {
+                this.redo();
+            }
+            this.hideContextMenu();
+        });
+
+        // 全选状态
+        menuItems[4].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.selectAllStates();
+            this.hideContextMenu();
+        });
+
+        // 自动布局
+        menuItems[5].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.autoLayout();
+            this.hideContextMenu();
+        });
+
+        // 放大视图
+        menuItems[6].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.zoomIn();
+            this.hideContextMenu();
+        });
+
+        // 缩小视图
+        menuItems[7].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.zoomOut();
+            this.hideContextMenu();
+        });
+
+        // 适应屏幕
+        menuItems[8].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.fitToScreen();
+            this.hideContextMenu();
+        });
+
+        // 导出状态机
+        menuItems[9].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.exportStateMachine();
+            this.hideContextMenu();
+        });
+
+        // 导入状态机
+        menuItems[10].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.importStateMachine();
+            this.hideContextMenu();
+        });
+
+        // 保存为图片
+        menuItems[11].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.saveAsImage();
+            this.hideContextMenu();
+        });
+
+        // 查看统计信息
+        menuItems[12].addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showStatistics();
+            this.hideContextMenu();
+        });
+
+        // 清空画布
+        menuItems[13].addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm('确定要清空画布吗？这将删除所有状态和转换。')) {
+                this.reset();
+            }
+            this.hideContextMenu();
+        });
+
+        document.body.appendChild(menu);
+
+        // 点击其他地方隐藏菜单
+        setTimeout(() => {
+            document.addEventListener('click', this.hideContextMenu.bind(this), { once: true });
+        }, 10);
+    }
+
+    /**
+     * 全选所有状态
+     */
+    selectAllStates() {
+        // 清除之前的选择
+        this.clearStateHighlights();
+        
+        // 高亮所有状态
+        this.states.forEach(state => {
+            this.highlightState(state.id, '#3b82f6');
+        });
+        
+        console.log(`已选择 ${this.states.size} 个状态`);
+        this.addToHistory(`全选状态 (${this.states.size}个)`);
+    }
+
+    /**
+     * 自动布局状态
+     */
+    autoLayout() {
+        if (this.states.size === 0) {
+            alert('没有状态需要布局');
+            return;
+        }
+
+        // 计算布局区域，考虑缩放和平移
+        const canvas = document.getElementById('canvas');
+        const rect = canvas.getBoundingClientRect();
+        
+        // 使用画布的逻辑坐标系，而不是视觉坐标系
+        const centerX = rect.width / 2 / this.zoom - this.panX;
+        const centerY = rect.height / 2 / this.zoom - this.panY;
+        const baseRadius = Math.min(rect.width, rect.height) / this.zoom * 0.3; // 缩小半径确保不超出边界
+        
+        const states = Array.from(this.states.values());
+        const stateCount = states.length;
+        
+        // 根据状态数量调整半径
+        const minRadius = 120; // 最小半径
+        const maxRadius = 300; // 最大半径
+        const radius = Math.max(minRadius, Math.min(maxRadius, baseRadius + stateCount * 10));
+        
+        const angleStep = (2 * Math.PI) / stateCount;
+
+        // 更新状态位置
+        states.forEach((state, index) => {
+            const angle = index * angleStep - Math.PI / 2; // 从顶部开始
+            const newX = centerX + radius * Math.cos(angle) - 40; // 40是节点半径
+            const newY = centerY + radius * Math.sin(angle) - 40;
+            
+            // 更新状态数据
+            state.x = newX;
+            state.y = newY;
+            
+            // 立即更新DOM元素位置
+            const element = document.getElementById(`state-${state.id}`);
+            if (element) {
+                element.style.left = `${newX}px`;
+                element.style.top = `${newY}px`;
+            }
+        });
+
+        // 更新所有转换线条
+        this.updateTransitions();
+        
+        // 自动适应屏幕以显示所有状态
+        this.fitToScreen();
+        
+        // 添加平滑的动画效果
+        setTimeout(() => {
+            states.forEach(state => {
+                const element = document.getElementById(`state-${state.id}`);
+                if (element) {
+                    element.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                    // 添加一个轻微的脉冲效果
+                    element.style.transform = 'scale(1.05)';
+                    setTimeout(() => {
+                        element.style.transform = 'scale(1)';
+                        // 移除transition避免影响拖拽
+                        setTimeout(() => {
+                            element.style.transition = '';
+                        }, 500);
+                    }, 200);
+                }
+            });
+        }, 100);
+        
+        this.saveToHistory('自动布局');
+        console.log(`状态自动布局完成 - ${stateCount}个状态排列成圆形`);
+    }
+
+    /**
+     * 保存为图片
+     */
+    saveAsImage() {
+        try {
+            // 创建一个临时canvas
+            const tempCanvas = document.createElement('canvas');
+            const ctx = tempCanvas.getContext('2d');
+            
+            // 获取画布大小
+            const canvas = document.getElementById('canvas');
+            const rect = canvas.getBoundingClientRect();
+            tempCanvas.width = rect.width;
+            tempCanvas.height = rect.height;
+            
+            // 设置背景色
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // 绘制网格（简化版）
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+            const gridSize = 20;
+            
+            for (let x = 0; x < tempCanvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, tempCanvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y < tempCanvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(tempCanvas.width, y);
+                ctx.stroke();
+            }
+            
+            // 绘制状态节点
+            this.states.forEach(state => {
+                const x = state.x + 40; // 节点中心
+                const y = state.y + 40;
+                const radius = 40;
+                
+                // 绘制圆形
+                ctx.fillStyle = state.color;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // 绘制边框
+                ctx.strokeStyle = '#374151';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 绘制文字
+                ctx.fillStyle = this.getTextColorForBackground(state.color);
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(state.name, x, y);
+            });
+            
+            // 下载图片
+            const link = document.createElement('a');
+            link.download = `状态机_${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = tempCanvas.toDataURL();
+            link.click();
+            
+            console.log('状态机图片已保存');
+            this.addToHistory('保存为图片');
+        } catch (error) {
+            console.error('保存图片失败:', error);
+            alert('保存图片失败，请稍后重试');
+        }
+    }
+
+    /**
+     * 显示统计信息
+     */
+    showStatistics() {
+        const initialStates = Array.from(this.states.values()).filter(s => s.isInitial).length;
+        const finalStates = Array.from(this.states.values()).filter(s => s.isFinal).length;
+        const regularStates = this.states.size - initialStates - finalStates;
+        
+        // 计算转换类型统计
+        const transitionTypes = {};
+        this.transitions.forEach(t => {
+            transitionTypes[t.event] = (transitionTypes[t.event] || 0) + 1;
+        });
+        
+        // 计算连通性
+        const connectedStates = new Set();
+        this.transitions.forEach(t => {
+            connectedStates.add(t.from);
+            connectedStates.add(t.to);
+        });
+        const isolatedStates = this.states.size - connectedStates.size;
+
+        const statsHTML = `
+            <div class="space-y-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">📊 状态机统计信息</h3>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-blue-50 p-3 rounded-lg">
+                        <div class="text-2xl font-bold text-blue-600">${this.states.size}</div>
+                        <div class="text-sm text-blue-800">总状态数</div>
+                    </div>
+                    <div class="bg-green-50 p-3 rounded-lg">
+                        <div class="text-2xl font-bold text-green-600">${this.transitions.length}</div>
+                        <div class="text-sm text-green-800">总转换数</div>
+                    </div>
+                    <div class="bg-purple-50 p-3 rounded-lg">
+                        <div class="text-2xl font-bold text-purple-600">${initialStates}</div>
+                        <div class="text-sm text-purple-800">初始状态</div>
+                    </div>
+                    <div class="bg-red-50 p-3 rounded-lg">
+                        <div class="text-2xl font-bold text-red-600">${finalStates}</div>
+                        <div class="text-sm text-red-800">终止状态</div>
+                    </div>
+                </div>
+
+                <div class="border-t pt-4">
+                    <h4 class="font-semibold text-gray-700 mb-2">详细信息</h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>常规状态:</span>
+                            <span class="font-medium">${regularStates}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>孤立状态:</span>
+                            <span class="font-medium ${isolatedStates > 0 ? 'text-orange-600' : 'text-green-600'}">${isolatedStates}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>连通状态:</span>
+                            <span class="font-medium">${connectedStates.size}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>平均转换/状态:</span>
+                            <span class="font-medium">${this.states.size > 0 ? (this.transitions.length / this.states.size).toFixed(2) : '0'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                ${Object.keys(transitionTypes).length > 0 ? `
+                <div class="border-t pt-4">
+                    <h4 class="font-semibold text-gray-700 mb-2">转换事件统计</h4>
+                    <div class="space-y-1 text-sm">
+                        ${Object.entries(transitionTypes).map(([event, count]) => 
+                            `<div class="flex justify-between">
+                                <span class="font-mono text-xs bg-gray-100 px-2 py-1 rounded">${event}</span>
+                                <span class="font-medium">${count}</span>
+                            </div>`
+                        ).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="border-t pt-4">
+                    <div class="text-xs text-gray-500">
+                        生成时间: ${new Date().toLocaleString()}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.showModal('状态机统计信息', statsHTML);
+        console.log('显示统计信息');
     }
 }
 
