@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>右键菜单测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .test-button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .test-button:hover {
+            background: #45a049;
+        }
+        #console {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>右键连线功能测试</h1>
+    <button class="test-button" onclick="testRightClick()">测试基本右键功能</button>
+    <button class="test-button" onclick="goToMainPage()">返回主页面</button>
+    
+    <div id="console">
+        <div>控制台输出:</div>
+    </div>
+
+    <script>
+        function log(message) {
+            const console = document.getElementById('console');
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            console.appendChild(div);
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function testRightClick() {
+            log('开始测试右键功能...');
+            
+            // 检查是否可以创建右键菜单
+            try {
+                const menu = document.createElement('div');
+                menu.id = 'testMenu';
+                menu.innerHTML = '<div>测试菜单</div>';
+                menu.style.position = 'fixed';
+                menu.style.top = '100px';
+                menu.style.left = '100px';
+                menu.style.background = 'white';
+                menu.style.border = '1px solid #ccc';
+                menu.style.padding = '10px';
+                menu.style.zIndex = '9999';
+                
+                document.body.appendChild(menu);
+                log('右键菜单创建成功');
+                
+                setTimeout(() => {
+                    menu.remove();
+                    log('右键菜单已移除');
+                }, 2000);
+                
+            } catch (error) {
+                log('右键菜单创建失败: ' + error.message);
+            }
+        }
+
+        function goToMainPage() {
+            window.location.href = 'index.html';
+        }
+
+        // 监听右键事件
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            log('右键事件被触发在位置: ' + e.clientX + ', ' + e.clientY);
+        });
+
+        log('测试页面已加载');
+    </script>
+</body>
+</html> 
