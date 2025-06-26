@@ -322,6 +322,60 @@
             transform: translateX(0);
             pointer-events: all;
         }
+        
+        /* 消息提示动画 */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        /* Toast 样式 */
+        .toast {
+            background: var(--md-surface);
+            color: var(--md-on-surface);
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateX(100%);
+            opacity: 0;
+            animation: toast-enter 0.3s ease-out forwards;
+            border-left: 4px solid var(--md-primary);
+        }
+
+        .toast-exit {
+            animation: toast-exit 0.3s ease-in forwards;
+        }
+
+        @keyframes toast-enter {
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes toast-exit {
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen" style="background-color: #180536;">
@@ -389,19 +443,37 @@
                     </div>
                 </div>
 
+                <!-- 属性面板 -->
+                <div id="propertiesPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">节点属性</h3>
+                    <div id="selectedNodeInfo" class="text-sm" style="color: var(--md-on-surface-variant);">
+                        点击节点查看属性
+                    </div>
+                </div>
+
                 <!-- 节点列表 -->
                 <div>
                     <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">节点列表</h3>
-                    <div id="nodesList" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div id="nodesList" class="space-y-2 max-h-48 overflow-y-auto">
                         <!-- 动态生成节点列表 -->
                     </div>
                 </div>
 
-                <!-- 属性面板 -->
-                <div id="propertiesPanel" class="md-surface-variant rounded-lg p-4">
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">属性面板</h3>
-                    <div id="selectedNodeInfo" class="text-sm" style="color: var(--md-on-surface-variant);">
-                        点击节点查看属性
+                <!-- 黑板数据 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">黑板数据</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <button id="addBlackboardBtn" class="text-xs transition-colors bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded">
+                            <i class="fas fa-plus mr-1"></i>添加数据
+                        </button>
+                        <button id="clearBlackboardBtn" class="text-xs transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                            <i class="fas fa-trash mr-1"></i>清空
+                        </button>
+                    </div>
+                    <div id="blackboardDataSection" class="md-surface-variant rounded-lg p-3 max-h-32 overflow-y-auto text-sm">
+                        <div class="text-center" style="color: var(--md-on-surface-variant);">
+                            暂无数据
+                        </div>
                     </div>
                 </div>
             </div>
@@ -411,18 +483,133 @@
         <div class="flex-1 relative">
             <!-- 画布工具栏 -->
             <div class="absolute top-4 left-4 z-10 flex space-x-2">
-                <button id="zoomInBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                <button id="refreshBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-secondary);" title="刷新画布">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button id="searchBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);" title="搜索节点">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button id="templatesBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-tertiary);" title="节点模板">
+                    <i class="fas fa-layer-group"></i>
+                </button>
+                <button id="zoomInBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);" title="放大">
                     <i class="fas fa-plus"></i>
                 </button>
-                <button id="zoomOutBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                <button id="zoomOutBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);" title="缩小">
                     <i class="fas fa-minus"></i>
                 </button>
-                <button id="fitBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                <button id="fitBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);" title="适应画布">
                     <i class="fas fa-expand"></i>
                 </button>
-                <button id="deleteBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-error);">
+                <button id="deleteBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-error);" title="删除选中">
                     <i class="fas fa-trash"></i>
                 </button>
+                <button id="autoSaveBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);" title="自动保存">
+                    <i class="fas fa-save"></i>
+                </button>
+                <button id="performanceBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);" title="性能监控">
+                    <i class="fas fa-chart-line"></i>
+                </button>
+            </div>
+
+            <!-- 搜索面板 -->
+            <div id="searchPanel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-4 w-96">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium" style="color: var(--md-on-surface);">搜索节点</h3>
+                        <button id="closeSearchBtn" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <input type="text" id="searchInput" placeholder="输入节点名称或类型..." 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div class="flex space-x-2">
+                            <select id="nodeTypeFilter" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">所有类型</option>
+                                <option value="selector">选择器</option>
+                                <option value="sequence">序列器</option>
+                                <option value="parallel">并行器</option>
+                                <option value="action">动作节点</option>
+                                <option value="condition">条件节点</option>
+                            </select>
+                            <select id="nodeStatusFilter" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">所有状态</option>
+                                <option value="ready">准备</option>
+                                <option value="running">运行中</option>
+                                <option value="success">成功</option>
+                                <option value="failure">失败</option>
+                            </select>
+                        </div>
+                        <div id="searchResults" class="max-h-48 overflow-y-auto">
+                            <!-- 搜索结果 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 模板面板 -->
+            <div id="templatesPanel" class="absolute top-4 right-4 z-20 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-4 w-80">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium" style="color: var(--md-on-surface);">节点模板</h3>
+                        <button id="closeTemplatesBtn" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex space-x-2">
+                            <select id="templateCategoryFilter" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">所有分类</option>
+                                <option value="AI">AI</option>
+                                <option value="NPC">NPC</option>
+                                <option value="Automation">自动化</option>
+                                <option value="State Management">状态管理</option>
+                                <option value="Utility">工具</option>
+                            </select>
+                            <button id="saveTemplateBtn" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                <i class="fas fa-save"></i>
+                            </button>
+                        </div>
+                        <div id="templatesList" class="max-h-64 overflow-y-auto space-y-2">
+                            <!-- 模板列表 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 性能监控面板 -->
+            <div id="performancePanel" class="absolute bottom-4 right-4 z-20 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-4 w-64">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium" style="color: var(--md-on-surface);">性能监控</h3>
+                        <button id="closePerformanceBtn" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>FPS:</span>
+                            <span id="fpsDisplay">60</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>节点数:</span>
+                            <span id="nodeCountDisplay">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>渲染时间:</span>
+                            <span id="renderTimeDisplay">0ms</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>内存使用:</span>
+                            <span id="memoryUsageDisplay">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>树深度:</span>
+                            <span id="treeDepthDisplay">0</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 行为树画布 -->
@@ -524,15 +711,7 @@
                     </div>
                 </div>
 
-                <!-- 黑板数据 -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">黑板数据</h3>
-                    <div id="blackboardDataSection" class="md-surface-variant rounded-lg p-3 h-32 overflow-y-auto text-sm">
-                        <div class="text-center" style="color: var(--md-on-surface-variant);">
-                            暂无数据
-                        </div>
-                    </div>
-                </div>
+
             </div>
         </div>
     </div>
@@ -561,6 +740,7 @@
     <script src="js/behaviorTree/BehaviorTreeNode.js"></script>
     <script src="js/behaviorTree/BehaviorTreeRenderer.js"></script>
     <script src="js/behaviorTree/BehaviorTreeSimulator.js"></script>
+    <script src="js/behaviorTree/BehaviorTreeTemplates.js"></script>
     <script src="js/behaviorTree/BehaviorTreeEditor.js"></script>
     
     <script>
@@ -609,6 +789,29 @@
                     editor.simulator.setExecutionSpeed(speed);
                 }
             });
+
+            // 搜索功能
+            document.getElementById('searchBtn').addEventListener('click', toggleSearchPanel);
+            document.getElementById('closeSearchBtn').addEventListener('click', hideSearchPanel);
+            document.getElementById('searchInput').addEventListener('input', performSearch);
+            document.getElementById('nodeTypeFilter').addEventListener('change', performSearch);
+            document.getElementById('nodeStatusFilter').addEventListener('change', performSearch);
+
+            // 模板功能
+            document.getElementById('templatesBtn').addEventListener('click', toggleTemplatesPanel);
+            document.getElementById('closeTemplatesBtn').addEventListener('click', hideTemplatesPanel);
+            document.getElementById('templateCategoryFilter').addEventListener('change', updateTemplatesList);
+            document.getElementById('saveTemplateBtn').addEventListener('click', saveCurrentAsTemplate);
+
+            // 性能监控
+            document.getElementById('performanceBtn').addEventListener('click', togglePerformancePanel);
+            document.getElementById('closePerformanceBtn').addEventListener('click', hidePerformancePanel);
+
+            // 自动保存
+            document.getElementById('autoSaveBtn').addEventListener('click', toggleAutoSave);
+
+            // 键盘快捷键
+            document.addEventListener('keydown', handleGlobalKeyDown);
             
             // 清空日志
             document.getElementById('clearLogBtn').addEventListener('click', function() {
@@ -645,6 +848,10 @@
             });
             
             // 画布工具栏
+            document.getElementById('refreshBtn').addEventListener('click', function() {
+                if (editor) editor.refreshCanvas();
+            });
+            
             document.getElementById('zoomInBtn').addEventListener('click', function() {
                 if (editor) editor.zoomIn();
             });
@@ -705,6 +912,15 @@
                     reader.readAsText(file);
                 }
                 this.value = '';
+            });
+            
+            // 黑板数据按钮
+            document.getElementById('addBlackboardBtn').addEventListener('click', function() {
+                addBlackboardData();
+            });
+            
+            document.getElementById('clearBlackboardBtn').addEventListener('click', function() {
+                clearBlackboardData();
             });
             
             // 定期更新统计信息
@@ -866,13 +1082,369 @@
             };
             return colors[type] || 'white';
         }
+
+        // 黑板数据管理
+        function addBlackboardData() {
+            const key = prompt('请输入数据键名:');
+            if (!key || key.trim() === '') return;
+            
+            const value = prompt('请输入数据值:');
+            if (value === null) return;
+            
+            try {
+                // 尝试解析JSON
+                let parsedValue;
+                try {
+                    parsedValue = JSON.parse(value);
+                } catch {
+                    parsedValue = value; // 如果不是JSON，就作为字符串
+                }
+                
+                if (editor && editor.simulator) {
+                    editor.simulator.setBlackboardValue(key.trim(), parsedValue);
+                    updateBlackboard();
+                    editor.showToast(`已添加黑板数据: ${key.trim()}`);
+                }
+            } catch (error) {
+                alert('数据格式错误: ' + error.message);
+            }
+        }
+
+        function clearBlackboardData() {
+            if (confirm('确定要清空所有黑板数据吗？')) {
+                if (editor && editor.simulator) {
+                    editor.simulator.clearBlackboard();
+                    updateBlackboard();
+                    editor.showToast('黑板数据已清空');
+                }
+            }
+        }
         
+        // 搜索功能
+        function toggleSearchPanel() {
+            const panel = document.getElementById('searchPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                document.getElementById('searchInput').focus();
+            }
+        }
+
+        function hideSearchPanel() {
+            document.getElementById('searchPanel').classList.add('hidden');
+            if (editor) {
+                editor.clearSearchHighlight();
+                editor.render();
+            }
+        }
+
+        function performSearch() {
+            if (!editor) return;
+
+            const query = document.getElementById('searchInput').value;
+            const nodeType = document.getElementById('nodeTypeFilter').value;
+            const nodeStatus = document.getElementById('nodeStatusFilter').value;
+
+            const results = editor.searchNodes(query, { nodeType, nodeStatus });
+            displaySearchResults(results);
+        }
+
+        function displaySearchResults(results) {
+            const container = document.getElementById('searchResults');
+            container.innerHTML = '';
+
+            if (results.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-4">未找到匹配的节点</div>';
+                return;
+            }
+
+            results.forEach((node, index) => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100';
+                item.innerHTML = `
+                    <div>
+                        <div class="font-medium text-sm">${node.name}</div>
+                        <div class="text-xs text-gray-500">${node.type} - ${node.status}</div>
+                    </div>
+                    <button class="text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-crosshairs"></i>
+                    </button>
+                `;
+                
+                item.addEventListener('click', () => {
+                    editor.navigateToSearchResult(index);
+                });
+
+                container.appendChild(item);
+            });
+        }
+
+        // 模板功能
+        function toggleTemplatesPanel() {
+            const panel = document.getElementById('templatesPanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                updateTemplatesList();
+            }
+        }
+
+        function hideTemplatesPanel() {
+            document.getElementById('templatesPanel').classList.add('hidden');
+        }
+
+        function updateTemplatesList() {
+            if (!editor) return;
+
+            const category = document.getElementById('templateCategoryFilter').value;
+            const templates = category ? 
+                editor.templates.getTemplatesByCategory(category) : 
+                editor.templates.getAllTemplates();
+
+            const container = document.getElementById('templatesList');
+            container.innerHTML = '';
+
+            templates.forEach(template => {
+                const item = document.createElement('div');
+                item.className = 'p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100';
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-medium text-sm">${template.name}</div>
+                            <div class="text-xs text-gray-500">${template.category}</div>
+                            <div class="text-xs text-gray-600 mt-1">${template.description}</div>
+                        </div>
+                        <div class="flex space-x-1">
+                            <button class="text-blue-600 hover:text-blue-800 p-1" title="使用模板">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button class="text-green-600 hover:text-green-800 p-1" title="导出模板">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                const useBtn = item.querySelector('.fa-plus').parentElement;
+                useBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    useTemplate(template.id);
+                });
+
+                const exportBtn = item.querySelector('.fa-download').parentElement;
+                exportBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    exportTemplate(template.id);
+                });
+
+                container.appendChild(item);
+            });
+        }
+
+        function useTemplate(templateId) {
+            if (!editor) return;
+            
+            try {
+                const nodes = editor.templates.instantiateTemplate(templateId, 100, 100);
+                nodes.forEach(node => {
+                    editor.tree.nodes.set(node.id, node);
+                });
+                
+                if (nodes.length > 0 && !editor.tree.root) {
+                    editor.tree.root = nodes[0];
+                }
+                
+                editor.updateNodesList();
+                editor.markAsDirty();
+                editor.render();
+                editor.showToast(`已添加模板: ${templateId}`, 'success');
+            } catch (error) {
+                editor.showToast(`模板使用失败: ${error.message}`, 'error');
+            }
+        }
+
+        function exportTemplate(templateId) {
+            if (!editor) return;
+            
+            try {
+                const templateData = editor.templates.exportTemplate(templateId);
+                const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `template_${templateId}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                editor.showToast('模板导出成功', 'success');
+            } catch (error) {
+                editor.showToast(`模板导出失败: ${error.message}`, 'error');
+            }
+        }
+
+        function saveCurrentAsTemplate() {
+            if (!editor || !editor.tree.root) {
+                editor.showToast('没有可保存的节点', 'warning');
+                return;
+            }
+
+            const name = prompt('请输入模板名称:');
+            if (!name) return;
+
+            const description = prompt('请输入模板描述:');
+            const category = prompt('请输入模板分类:') || 'Custom';
+
+            try {
+                const selectedNodes = Array.from(editor.state.selectedNodes);
+                const nodesToSave = selectedNodes.length > 0 ? selectedNodes : [editor.tree.root];
+                
+                const templateId = `custom_${Date.now()}`;
+                editor.templates.createTemplateFromNodes(nodesToSave, {
+                    id: templateId,
+                    name,
+                    description,
+                    category,
+                    icon: 'fas fa-cube'
+                });
+
+                editor.templates.saveToLocalStorage();
+                updateTemplatesList();
+                editor.showToast('模板保存成功', 'success');
+            } catch (error) {
+                editor.showToast(`模板保存失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 性能监控
+        function togglePerformancePanel() {
+            const panel = document.getElementById('performancePanel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                startPerformanceMonitoring();
+            } else {
+                stopPerformanceMonitoring();
+            }
+        }
+
+        function hidePerformancePanel() {
+            document.getElementById('performancePanel').classList.add('hidden');
+            stopPerformanceMonitoring();
+        }
+
+        let performanceTimer = null;
+
+        function startPerformanceMonitoring() {
+            if (performanceTimer) return;
+
+            performanceTimer = setInterval(() => {
+                if (!editor) return;
+
+                const stats = editor.getPerformanceStats();
+                
+                document.getElementById('fpsDisplay').textContent = stats.fps;
+                document.getElementById('nodeCountDisplay').textContent = stats.nodeCount;
+                document.getElementById('renderTimeDisplay').textContent = `${stats.renderTime.toFixed(1)}ms`;
+                document.getElementById('treeDepthDisplay').textContent = stats.treeComplexity.depth;
+                
+                if (stats.memoryUsage) {
+                    document.getElementById('memoryUsageDisplay').textContent = 
+                        `${stats.memoryUsage.used}/${stats.memoryUsage.total}MB`;
+                }
+            }, 1000);
+        }
+
+        function stopPerformanceMonitoring() {
+            if (performanceTimer) {
+                clearInterval(performanceTimer);
+                performanceTimer = null;
+            }
+        }
+
+        // 自动保存
+        function toggleAutoSave() {
+            if (!editor) return;
+
+            editor.options.autoSave = !editor.options.autoSave;
+            const btn = document.getElementById('autoSaveBtn');
+            
+            if (editor.options.autoSave) {
+                btn.style.color = 'var(--md-secondary)';
+                btn.title = '自动保存已启用';
+                editor.setupAutoSave();
+                editor.showToast('自动保存已启用', 'success');
+            } else {
+                btn.style.color = 'var(--md-on-surface)';
+                btn.title = '自动保存已禁用';
+                if (editor.autoSave.timer) {
+                    clearInterval(editor.autoSave.timer);
+                    editor.autoSave.timer = null;
+                }
+                editor.showToast('自动保存已禁用', 'info');
+            }
+        }
+
+        // 全局键盘快捷键
+        function handleGlobalKeyDown(event) {
+            if (!editor) return;
+
+            // Ctrl+F - 搜索
+            if (event.ctrlKey && event.key === 'f') {
+                event.preventDefault();
+                toggleSearchPanel();
+                return;
+            }
+
+            // Ctrl+T - 模板
+            if (event.ctrlKey && event.key === 't') {
+                event.preventDefault();
+                toggleTemplatesPanel();
+                return;
+            }
+
+            // Ctrl+Shift+P - 性能监控
+            if (event.ctrlKey && event.shiftKey && event.key === 'P') {
+                event.preventDefault();
+                togglePerformancePanel();
+                return;
+            }
+
+            // Ctrl+S - 手动保存
+            if (event.ctrlKey && event.key === 's') {
+                event.preventDefault();
+                if (editor.autoSave.isDirty) {
+                    editor.performAutoSave();
+                } else {
+                    editor.showToast('没有需要保存的更改', 'info');
+                }
+                return;
+            }
+
+            // Escape - 关闭所有面板
+            if (event.key === 'Escape') {
+                hideSearchPanel();
+                hideTemplatesPanel();
+                hidePerformancePanel();
+                return;
+            }
+        }
+
+        // 渲染循环中更新性能统计
+        function updatePerformanceStats() {
+            if (editor) {
+                editor.updatePerformanceStats();
+                editor.optimizePerformance();
+            }
+        }
+
+        // 定期更新性能统计
+        setInterval(updatePerformanceStats, 1000);
+
         // 导出给全局使用
         window.BehaviorTreeEditorUI = {
             editor,
             updateUI,
             addLogEntry,
-            updateExecutionState
+            updateExecutionState,
+            toggleSearchPanel,
+            toggleTemplatesPanel,
+            togglePerformancePanel
         };
     </script>
 
