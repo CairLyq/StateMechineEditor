@@ -3,22 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>状态机编辑器 State Machine Editor</title>
+    <title>可视化编辑器套件 - Visual Editor Suite</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="favicon.ico">
+    
+    <!-- Web Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#67089c">
     
     <!-- TailwindCSS CDN -->
     <script src="lib/tailwindcss.3.4.16.js"></script>
     
     <!-- Font Awesome CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="lib/font-awesome.6.4.0.css">
     
     <!-- Framer Motion CDN -->
-    <script src="lib/framer-motion.js"></script>
-    
-    <!-- 分层状态机编辑器模块 -->
-    <script src="js/HierarchicalStateNode.js"></script>
-    <script src="js/HierarchicalTransition.js"></script>
-    <script src="js/HierarchicalRenderer.js"></script>
-    <script src="js/HierarchicalStateMachineEditor.js"></script>
+    <!-- <script src="lib/framer-motion.js"></script> -->
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,540 +44,369 @@
             --md-on-tertiary: #ffffff;
             --md-on-tertiary-container: #f5f0ff;
             
-            --md-surface: rgba(255, 255, 255, 0.12);
-            --md-surface-variant: rgba(255, 255, 255, 0.15);
+            --md-surface: rgba(255, 255, 255, 0.08);
+            --md-surface-variant: rgba(255, 255, 255, 0.12);
             --md-on-surface: #ffffff;
             --md-on-surface-variant: #f0f0f0;
             
-            --md-surface-container-lowest: rgba(255, 255, 255, 0.02);
-            --md-surface-container-low: rgba(255, 255, 255, 0.04);
-            --md-surface-container: rgba(255, 255, 255, 0.06);
-            --md-surface-container-high: rgba(255, 255, 255, 0.08);
-            --md-surface-container-highest: rgba(255, 255, 255, 0.12);
-            
             --md-outline: rgba(147, 143, 153, 0.4);
             --md-outline-variant: rgba(73, 69, 79, 0.4);
-            
-            --md-error: #ffb4ab;
-            --md-error-container: #93000a;
-            --md-on-error: #690005;
-            --md-on-error-container: #ffdad6;
-            
-            --md-success: #4caf50;
-            --md-success-container: #1b5e20;
-            --md-on-success: #ffffff;
-            --md-on-success-container: #c8e6c9;
-            
-            --md-warning: #ff9800;
-            --md-warning-container: #e65100;
-            --md-on-warning: #ffffff;
-            --md-on-warning-container: #fff3e0;
         }
         
-        body {
+        html, body {
             font-family: 'Inter', sans-serif;
             color: var(--md-on-surface);
+            background: linear-gradient(135deg, #180536 0%, #3d1960 100%);
+            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
         }
         
-        .state-node {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        /* 禁用所有滚动条 */
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        *::-webkit-scrollbar {
+            display: none;
         }
         
-        .state-node:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 25px rgba(103, 8, 156, 0.3);
+        html, body, * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
         
-        .transition-line {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .transition-stroke {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .transition-label-bg {
-            transition: all 0.2s ease-out;
-        }
-        
-        /* 连线点击区域样式 */
-        .transition-click-area {
-            pointer-events: all;
-        }
-        
-        .transition-click-area:hover {
-            stroke: rgba(0, 212, 170, 0.2) !important;
-        }
-        
-        /* 预览连线动画 */
-        .preview-line {
-            animation: previewPulse 1s ease-in-out infinite;
-        }
-        
-        @keyframes previewPulse {
-            0%, 100% {
-                opacity: 0.8;
-            }
-            50% {
-                opacity: 1;
-            }
-        }
-        
-        /* 右键菜单样式 */
-        #contextMenu {
-            backdrop-filter: blur(8px);
-            background: rgba(255, 255, 255, 0.95);
-            animation: contextMenuFadeIn 0.15s ease-out;
-        }
-        
-        @keyframes contextMenuFadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-8px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .glass-effect {
-            backdrop-filter: blur(10px);
-            background: var(--md-surface-container);
-        }
-        
-        .smooth-scroll {
-            scroll-behavior: smooth;
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.6s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .md-surface {
-            background: var(--md-surface-container);
-            color: var(--md-on-surface);
-            border: 1px solid var(--md-outline-variant);
-        }
-        
-        .md-primary-btn {
-            background: var(--md-primary);
-            color: var(--md-on-primary);
-            border: none;
-        }
-        
-        .md-primary-btn:hover {
-            background: var(--md-primary-container);
-            box-shadow: 0 4px 12px rgba(24, 5, 54, 0.4);
-        }
-        
-        .md-secondary-btn {
-            background: var(--md-secondary);
-            color: var(--md-on-secondary);
-            border: none;
-        }
-        
-        .md-secondary-btn:hover {
-            background: var(--md-secondary-container);
-            box-shadow: 0 4px 12px rgba(103, 8, 156, 0.4);
-        }
-        
-        .md-surface-variant {
-            background: var(--md-surface-variant);
-            color: var(--md-on-surface-variant);
-        }
-
-        /* 画布网格背景 */
-        .canvas-grid {
+        /* 背景动画效果 */
+        .bg-animation {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            opacity: 0.3;
             background-image: 
-                /* 粗网格线 (每120px一条，即每10个细网格，主要分割线) */
-                linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
-                /* 细网格线 (每12px一条，辅助网格) */
-                linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-            background-size: 
-                120px 120px,
-                120px 120px,
-                12px 12px,
-                12px 12px;
-            background-position: 
-                0 0,
-                0 0,
-                0 0,
-                0 0;
+                radial-gradient(circle at 20% 50%, rgba(103, 8, 156, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(138, 43, 226, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(124, 82, 149, 0.3) 0%, transparent 50%);
         }
-
-        /* 网格跟随缩放和平移 */
-        .canvas-grid-container {
-            background-attachment: local;
+        
+        /* 卡片样式 */
+        .editor-card {
+            background: var(--md-surface);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--md-outline-variant);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
         }
-
-        /* 提高输入框和代码块的对比度 */
-        input[type="text"], input[type="checkbox"], textarea {
-            background: rgba(255, 255, 255, 0.9) !important;
-            color: #1a1a1a !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        
+        .editor-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.05) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
-
-        input[type="text"]:focus, textarea:focus {
-            background: rgba(255, 255, 255, 0.95) !important;
-            color: #000000 !important;
-            border: 2px solid #4caf50 !important;
-            outline: none !important;
+        
+        .editor-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            border-color: var(--md-secondary);
         }
-
-        /* 代码块样式 */
-        code {
-            background: rgba(255, 255, 255, 0.9) !important;
-            color: #1a1a1a !important;
-            padding: 2px 4px !important;
-            border-radius: 4px !important;
-            font-weight: 600 !important;
+        
+        .editor-card:hover::before {
+            opacity: 1;
         }
-
-        /* 属性面板文本对比度增强 */
-        .property-label {
-            color: #ffffff !important;
-            font-weight: 600 !important;
+        
+        /* 按钮样式 */
+        .enter-btn {
+            background: linear-gradient(135deg, var(--md-secondary) 0%, var(--md-secondary-container) 100%);
+            color: var(--md-on-secondary);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
-
-        .property-value {
-            color: #f0f0f0 !important;
-            font-weight: 500 !important;
+        
+        .enter-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
         }
-
-        /* 模态框内容增强 */
-        .modal-content label {
-            color: #ffffff !important;
-            font-weight: 600 !important;
+        
+        .enter-btn:hover::before {
+            width: 300px;
+            height: 300px;
         }
-
-        /* 分层状态机样式 */
-        .hierarchical-state-node {
-            pointer-events: all;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(8px);
-            z-index: 1;
+        
+        .enter-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(103, 8, 156, 0.4);
         }
-
-        .hierarchical-state-node.level-0 {
-            border-width: 3px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-        }
-
-        .hierarchical-state-node.level-1 {
-            border-width: 2px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        }
-
-        .hierarchical-state-node.level-2 {
-            border-width: 1px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .hierarchical-state-node.composite-state {
-            border-style: dashed;
-        }
-
-        .hierarchical-state-node.leaf-state {
-            border-style: solid;
-        }
-
-        .hierarchical-state-node:hover {
-            transform: scale(1.02);
-            z-index: 10;
-        }
-
-        .expander-button {
-            user-select: none;
+        
+        /* 特性标签 */
+        .feature-tag {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             transition: all 0.2s ease;
         }
-
-        .expander-button:hover {
-            transform: scale(1.1);
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        
+        .feature-tag:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
         }
-
-        .level-indicator {
-            font-size: 8px;
-            font-weight: bold;
-            color: rgba(255, 255, 255, 0.8);
+        
+        /* 标题动画 */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-
-        .hierarchical-transition {
-            pointer-events: all;
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-
-        .hierarchical-transition:hover path {
-            stroke-width: 3;
-            filter: drop-shadow(0 0 4px currentColor);
+        
+        .fade-in-down {
+            animation: fadeInDown 0.8s ease-out;
         }
-
-        /* 模式切换动画 */
-        .mode-transition {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        
+        .fade-in-up {
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+        
+        /* 图标装饰 */
+        .icon-decoration {
+            position: absolute;
+            opacity: 0.1;
+            font-size: 120px;
+            top: -20px;
+            right: 20px;
+            transform: rotate(-15deg);
+            transition: all 0.3s ease;
+        }
+        
+        .editor-card:hover .icon-decoration {
+            opacity: 0.2;
+            transform: rotate(-10deg) scale(1.1);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .editor-card {
+                margin-bottom: 20px;
+            }
         }
     </style>
 </head>
-<body class="min-h-screen" style="background-color: #180536;">
-    <!-- 顶部导航栏 -->
-    <nav class="md-surface backdrop-blur-md sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-4">
-                    <h1 class="text-2xl font-bold" style="color: var(--md-on-surface);">状态机编辑器</h1>
-                    <span class="text-sm" style="color: var(--md-on-surface-variant);">State Machine Editor</span>
-                </div>
-                
-                <div class="flex items-center space-x-4">
-                    <button id="undoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
-                        <i class="fas fa-undo"></i>
-                    </button>
-                    <button id="redoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
-                        <i class="fas fa-redo"></i>
-                    </button>
-                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
-                    <button id="importBtn" class="md-surface-variant px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface);">
-                        <i class="fas fa-upload mr-2"></i>导入 Import
-                    </button>
-                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
-                    <button id="exportBtn" class="md-primary-btn px-4 py-2 rounded-lg transition-colors">
-                        <i class="fas fa-download mr-2"></i>导出 Export
-                    </button>
-                </div>
+<body>
+    <!-- 背景动画 -->
+    <div class="bg-animation"></div>
+    
+    <!-- 主内容区域 -->
+    <div class="relative z-10 min-h-screen flex items-center justify-center p-8">
+        <div class="max-w-6xl w-full">
+            <!-- 标题区域 -->
+            <div class="text-center mb-12">
+                <h1 class="text-5xl font-bold mb-4 fade-in-down">
+                    <span style="background: linear-gradient(135deg, #fff 0%, #e8ddff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                        可视化编辑器套件
+                    </span>
+                </h1>
+                <p class="text-xl text-gray-300 fade-in-up">
+                    Visual Editor Suite - 强大的可视化编程工具集
+                </p>
             </div>
-        </div>
-    </nav>
-
-    <div class="flex h-screen">
-        <!-- 左侧工具栏 -->
-        <div class="w-64 md-surface backdrop-blur-md p-4">
-            <div class="space-y-6">
-                <!-- 工具箱 -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">工具箱</h3>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button id="addStateBtn" class="tool-btn md-secondary-btn p-3 rounded-lg transition-all duration-200">
-                            <i class="fas fa-circle-plus text-lg mb-1"></i>
-                            <div class="text-xs font-medium">添加状态</div>
-                        </button>
-                        <button id="addTransitionBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-success);">
-                            <i class="fas fa-arrow-right text-lg mb-1"></i>
-                            <div class="text-xs font-medium">添加转换</div>
-                        </button>
-                        <button id="addChildStateBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);">
-                            <i class="fas fa-sitemap text-lg mb-1"></i>
-                            <div class="text-xs font-medium">添加子状态</div>
-                        </button>
-                        <button id="toggleModeBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-secondary);">
-                            <i class="fas fa-layer-group text-lg mb-1"></i>
-                            <div class="text-xs font-medium">分层模式</div>
-                        </button>
-                        <button id="simulateBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);">
-                            <i class="fas fa-play text-lg mb-1"></i>
-                            <div class="text-xs font-medium">模拟运行</div>
-                        </button>
-                        <button id="resetBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-error);">
-                            <i class="fas fa-refresh text-lg mb-1"></i>
-                            <div class="text-xs font-medium">重置</div>
-                        </button>
+            <!-- 编辑器选择卡片 -->
+            <div class="grid lg:grid-cols-3 md:grid-cols-2 gap-8 fade-in-up">
+                <!-- 标准状态机编辑器 -->
+                <div class="editor-card rounded-2xl p-8 flex flex-col">
+                    <div class="icon-decoration">
+                        <i class="fas fa-project-diagram"></i>
                     </div>
-                </div>
-
-                <!-- 状态列表 -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">状态列表</h3>
-                    <div id="statesList" class="space-y-2 max-h-64 overflow-y-auto">
-                        <!-- 动态生成状态列表 -->
-                    </div>
-                </div>
-
-                <!-- 属性面板 -->
-                <div id="propertiesPanel" class="md-surface-variant rounded-lg p-4">
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">属性面板</h3>
-                    <div id="selectedElementInfo" class="text-sm" style="color: var(--md-on-surface-variant);">
-                        点击状态或转换查看属性
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 主编辑区域 -->
-        <div class="flex-1 relative">
-            <!-- 画布工具栏 -->
-            <div class="absolute top-4 left-4 z-10 flex space-x-2">
-                <button id="zoomInBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
-                    <i class="fas fa-plus"></i>
-                </button>
-                <button id="zoomOutBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
-                    <i class="fas fa-minus"></i>
-                </button>
-                <button id="fitToScreenBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
-                    <i class="fas fa-expand"></i>
-                </button>
-            </div>
-
-            <!-- 扁平状态机画布 -->
-            <div id="canvas" class="w-full h-full canvas-grid relative overflow-hidden cursor-crosshair" style="background-color: rgba(24, 5, 54, 0.6);">
-                <svg id="svgCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;">
-                    <defs>
-                        <!-- Blueprint风格箭头 - 小号版本 -->
-                        <marker id="blueprintArrowSmall" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
-                            <path d="M0,0 L0,5 L7,2.5 z" fill="#FFD700" stroke="#FFD700" stroke-width="0.5"/>
-                        </marker>
-                        
-                        <!-- 连线渐变 - 正常状态 -->
-                        <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" style="stop-color:#00D4AA;stop-opacity:0.9" />
-                            <stop offset="50%" style="stop-color:#00E5BB;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#00F2CC;stop-opacity:0.9" />
-                        </linearGradient>
-                        
-                        <!-- 连线渐变 - 悬停状态 -->
-                        <linearGradient id="connectionGradientHover" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:0.9" />
-                            <stop offset="50%" style="stop-color:#FF8E8E;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#FFB1B1;stop-opacity:0.9" />
-                        </linearGradient>
-                        
-
-                        
-                        <!-- 连线发光效果 -->
-                        <filter id="connectionGlow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                            <feMerge> 
-                                <feMergeNode in="coloredBlur"/>
-                                <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                        </filter>
-                        
-                        <!-- 标签发光效果 -->
-                        <filter id="labelGlow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
-                            <feMerge> 
-                                <feMergeNode in="coloredBlur"/>
-                                <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                        </filter>
-                        
-                        <!-- 状态节点发光效果 -->
-                        <filter id="glow">
-                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                            <feMerge> 
-                                <feMergeNode in="coloredBlur"/>
-                                <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                        </filter>
-                        
-                        <!-- 分层状态机箭头 -->
-                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#00d4aa" />
-                        </marker>
-                    </defs>
-                </svg>
-                
-                <!-- 状态节点容器 -->
-                <div id="statesContainer" class="absolute inset-0 pointer-events-none">
-                    <!-- 动态生成状态节点 -->
-                </div>
-            </div>
-
-            <!-- 分层状态机画布 -->
-            <div id="hierarchicalCanvas" class="w-full h-full canvas-grid relative overflow-hidden cursor-crosshair" style="background-color: rgba(24, 5, 54, 0.6); display: none;">
-                <svg id="hierarchicalSvgCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;">
-                    <defs>
-                        <!-- 继承扁平状态机的所有定义 -->
-                        <marker id="hierarchicalArrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                            <polygon points="0 0, 10 3.5, 0 7" fill="#00d4aa" />
-                        </marker>
-                    </defs>
-                </svg>
-                
-                <!-- 分层状态节点容器 -->
-                <div id="hierarchicalStatesContainer" class="absolute inset-0 pointer-events-none">
-                    <!-- 动态生成分层状态节点 -->
-                </div>
-            </div>
-        </div>
-
-        <!-- 右侧信息面板 -->
-        <div class="w-80 md-surface backdrop-blur-md p-4">
-            <div class="space-y-6">
-                <!-- 统计信息 -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">统计信息</h3>
-                    <div class="md-surface-variant rounded-lg p-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="text-center">
-                                <div class="text-2xl font-bold" style="color: #4CAF50;" id="statesCount">0</div>
-                                <div class="text-xs" style="color: var(--md-on-surface-variant);">状态数量</div>
+                    
+                    <div class="flex-1 mb-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-4">
+                                <i class="fas fa-sitemap text-white text-xl"></i>
                             </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-bold" style="color: #FF9800;" id="transitionsCount">0</div>
-                                <div class="text-xs" style="color: var(--md-on-surface-variant);">转换数量</div>
+                            <h2 class="text-2xl font-bold">标准状态机编辑器</h2>
+                        </div>
+                        
+                        <p class="text-gray-300 mb-6">
+                            创建和管理标准的有限状态机（FSM），支持可视化设计、实时模拟和代码生成，适合简单的状态转换逻辑。
+                        </p>
+                        
+                        <!-- 特性标签 -->
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-circle-nodes mr-1"></i>标准状态机
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-play-circle mr-1"></i>实时模拟
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-code mr-1"></i>代码生成
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-file-export mr-1"></i>导入导出
+                            </span>
+                        </div>
+                        
+                        <!-- 功能列表 -->
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>拖拽式可视化编辑</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>状态转换和条件</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>事件驱动的状态切换</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>简洁直观的界面</li>
+                        </ul>
+                    </div>
+                    
+                    <a href="stateMachine/fsm/index.html" class="enter-btn w-full py-3 rounded-xl font-semibold text-center block relative mt-auto">
+                        <span class="relative z-10">
+                            <i class="fas fa-arrow-right mr-2"></i>进入标准状态机编辑器
+                        </span>
+                    </a>
+                </div>
+                
+                <!-- 分层状态机编辑器 -->
+                <div class="editor-card rounded-2xl p-8 flex flex-col">
+                    <div class="icon-decoration">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    
+                    <div class="flex-1 mb-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mr-4">
+                                <i class="fas fa-layer-group text-white text-xl"></i>
                             </div>
+                            <h2 class="text-2xl font-bold">分层状态机编辑器</h2>
                         </div>
-                    </div>
-                </div>
-
-                <!-- 模拟控制 -->
-                <div id="simulationPanel" class="md-surface-variant rounded-lg p-4">
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">模拟控制</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">当前状态</label>
-                            <div id="currentState" class="md-surface px-3 py-2 rounded text-sm">未开始</div>
+                        
+                        <p class="text-gray-300 mb-6">
+                            创建和管理复杂的分层状态机（HFSM），支持嵌套状态、并行状态和复合状态，适合复杂的状态管理场景。
+                        </p>
+                        
+                        <!-- 特性标签 -->
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-layer-group mr-1"></i>分层状态机
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-cubes mr-1"></i>嵌套状态
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-project-diagram mr-1"></i>复合状态
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-history mr-1"></i>历史状态
+                            </span>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">输入事件</label>
-                            <input id="eventInput" type="text" class="w-full px-3 py-2 md-surface rounded-lg text-sm" placeholder="输入事件名称" style="color: var(--md-on-surface);">
+                        
+                        <!-- 功能列表 -->
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>多层级状态嵌套</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>并行状态区域</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>复合状态和子状态</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>历史状态和深度导航</li>
+                        </ul>
+                    </div>
+                    
+                    <a href="stateMachine/hfsm/index.html" class="enter-btn w-full py-3 rounded-xl font-semibold text-center block relative mt-auto">
+                        <span class="relative z-10">
+                            <i class="fas fa-arrow-right mr-2"></i>进入分层状态机编辑器
+                        </span>
+                    </a>
+                </div>
+                
+                <!-- 行为树编辑器 -->
+                <div class="editor-card rounded-2xl p-8 flex flex-col">
+                    <div class="icon-decoration">
+                        <i class="fas fa-tree"></i>
+                    </div>
+                    
+                    <div class="flex-1 mb-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center mr-4">
+                                <i class="fas fa-code-branch text-white text-xl"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold">行为树编辑器</h2>
                         </div>
-                        <button id="triggerEventBtn" class="w-full md-primary-btn py-2 rounded-lg transition-colors">
-                            触发事件
-                        </button>
+                        
+                        <p class="text-gray-300 mb-6">
+                            设计和调试AI行为树，支持多种节点类型、装饰器模式和黑板数据系统，适用于游戏AI和机器人控制。
+                        </p>
+                        
+                        <!-- 特性标签 -->
+                        <div class="flex flex-wrap gap-2 mb-6">
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-brain mr-1"></i>AI编程
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-bug mr-1"></i>调试工具
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-database mr-1"></i>黑板系统
+                            </span>
+                            <span class="feature-tag px-3 py-1 rounded-full text-xs">
+                                <i class="fas fa-puzzle-piece mr-1"></i>模板库
+                            </span>
+                        </div>
+                        
+                        <!-- 功能列表 -->
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>组合、选择、序列节点</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>条件和动作节点系统</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>装饰器和服务节点</li>
+                            <li><i class="fas fa-check text-green-400 mr-2"></i>实时执行和断点调试</li>
+                        </ul>
                     </div>
+                    
+                    <a href="behaviorTree/index.html" class="enter-btn w-full py-3 rounded-xl font-semibold text-center block relative mt-auto">
+                        <span class="relative z-10">
+                            <i class="fas fa-arrow-right mr-2"></i>进入行为树编辑器
+                        </span>
+                    </a>
                 </div>
-
-                <!-- 历史记录 -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">历史记录</h3>
-                    <div id="historyList" class="space-y-2 max-h-64 overflow-y-auto">
-                        <!-- 动态生成历史记录 -->
-                    </div>
-                </div>
+            </div>
+            
+            <!-- 底部信息 -->
+            <div class="text-center mt-12 text-sm text-gray-400 fade-in-up" style="animation-delay: 0.4s;">
+                <p>
+                    <i class="fas fa-info-circle mr-2"></i>
+                    选择合适的编辑器开始您的可视化编程之旅
+                </p>
             </div>
         </div>
     </div>
-
-    <!-- 模态框 -->
-    <div id="modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
-        <div class="md-surface rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300">
-            <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 id="modalTitle" class="text-lg font-semibold" style="color: var(--md-on-surface);"></h3>
-                    <button id="closeModal" class="transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div id="modalContent">
-                    <!-- 动态内容 -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="js/StateMachineEditor.js"></script>
+    
+    <!-- GitHub 链接（如果需要） -->
+    <a href="https://github.com" class="fixed bottom-4 right-4 text-gray-400 hover:text-white transition-colors z-20" target="_blank">
+        <i class="fab fa-github text-2xl"></i>
+    </a>
 </body>
 </html> 

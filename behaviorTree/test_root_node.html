@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROOT节点测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>ROOT节点测试</h1>
+    <div id="results"></div>
+
+    <!-- 加载所有必需的脚本 -->
+    <script src="nodes/BaseNode.js"></script>
+    <script src="nodes/RootNode.js"></script>
+    <script src="nodes/SelectorNode.js"></script>
+    <script src="nodes/SequenceNode.js"></script>
+    <script src="nodes/ParallelNode.js"></script>
+    <script src="nodes/InverterNode.js"></script>
+    <script src="nodes/RepeaterNode.js"></script>
+    <script src="nodes/ActionNode.js"></script>
+    <script src="nodes/ConditionNode.js"></script>
+    <script src="nodes/NodeFactory.js"></script>
+    <script src="nodes/index.js"></script>
+
+    <script>
+        function addResult(message, type = 'success') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            document.getElementById('results').appendChild(div);
+        }
+
+        function runTests() {
+            try {
+                // 测试 NodeFactory 创建 ROOT 节点
+                const factory = new NodeFactory();
+                const rootNode = factory.createNode(NodeType.ROOT);
+                
+                if (rootNode && rootNode.type === NodeType.ROOT) {
+                    addResult('✓ ROOT节点创建成功', 'success');
+                } else {
+                    addResult('❌ ROOT节点创建失败', 'error');
+                    return;
+                }
+                
+                // 测试 ROOT 节点属性
+                if (rootNode.name.includes('根节点')) {
+                    addResult('✓ ROOT节点名称正确', 'success');
+                } else {
+                    addResult('❌ ROOT节点名称错误: ' + rootNode.name, 'error');
+                }
+                
+                // 测试 ROOT 节点是否可以有子节点
+                if (rootNode.canHaveChildren()) {
+                    addResult('✓ ROOT节点可以有子节点', 'success');
+                } else {
+                    addResult('❌ ROOT节点不能有子节点', 'error');
+                }
+                
+                // 测试添加子节点
+                const selectorNode = factory.createNode(NodeType.SELECTOR);
+                rootNode.addChild(selectorNode);
+                
+                if (rootNode.children.length === 1) {
+                    addResult('✓ 成功为ROOT节点添加子节点', 'success');
+                } else {
+                    addResult('❌ 添加子节点失败', 'error');
+                }
+                
+                // 测试 ROOT 节点执行
+                const status = rootNode.execute();
+                if (status) {
+                    addResult('✓ ROOT节点执行成功，状态: ' + status, 'success');
+                } else {
+                    addResult('❌ ROOT节点执行失败', 'error');
+                }
+                
+                // 测试 ROOT 节点属性配置
+                const config = rootNode.getPropertyConfig();
+                if (config && config.length > 0) {
+                    addResult(`✓ ROOT节点属性配置成功，共${config.length}个属性`, 'success');
+                } else {
+                    addResult('❌ ROOT节点属性配置失败', 'error');
+                }
+                
+                // 测试 ROOT 节点验证
+                const errors = rootNode.validate();
+                if (Array.isArray(errors)) {
+                    addResult(`✓ ROOT节点验证成功，错误数: ${errors.length}`, 'success');
+                } else {
+                    addResult('❌ ROOT节点验证失败', 'error');
+                }
+                
+                addResult('🎉 所有测试完成！', 'success');
+                
+            } catch (error) {
+                addResult('❌ 测试过程中发生错误: ' + error.message, 'error');
+                console.error('测试错误:', error);
+            }
+        }
+
+        // 页面加载完成后运行测试
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 100); // 稍微延迟确保所有脚本加载完成
+        });
+    </script>
+</body>
+</html> 

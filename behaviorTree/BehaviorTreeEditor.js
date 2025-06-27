@@ -16,12 +16,15 @@ class BehaviorTreeEditor {
             autoLayout: true,
             debug: false,
             performance: true,
-            autoSave: true,
+            autoSave: false, // 默认关闭自动保存
             autoSaveInterval: 300000, // 5分钟
             maxUndoSteps: 50,
             maxNodes: 10000, // 最大节点数限制
             ...options
         };
+        
+        // 初始化节点工厂
+        this.nodeFactory = nodeFactory;
         
         // 行为树数据
         this.tree = {
@@ -54,6 +57,9 @@ class BehaviorTreeEditor {
             connecting: null,
             clipboard: null
         };
+        
+        // 渲染请求ID，用于防抖
+        this.renderRequestId = null;
         
         // 历史记录
         this.history = {
@@ -93,7 +99,10 @@ class BehaviorTreeEditor {
         
         this.setupEventListeners();
         this.setupUI();
-        this.setupAutoSave();
+        // 只有在autoSave选项为true时才设置自动保存
+        if (this.options.autoSave) {
+            this.setupAutoSave();
+        }
         this.createExampleTree();
         this.render();
     }
@@ -122,7 +131,6 @@ class BehaviorTreeEditor {
      */
     setupUI() {
         // 工具栏按钮事件
-        document.getElementById('addNodeBtn')?.addEventListener('click', () => this.showNodePalette());
         document.getElementById('deleteBtn')?.addEventListener('click', () => this.deleteSelected());
         document.getElementById('undoBtn')?.addEventListener('click', () => this.undo());
         document.getElementById('redoBtn')?.addEventListener('click', () => this.redo());
@@ -133,7 +141,7 @@ class BehaviorTreeEditor {
         document.getElementById('stopBtn')?.addEventListener('click', () => this.stopSimulation());
         document.getElementById('exportBtn')?.addEventListener('click', () => this.exportTree());
         document.getElementById('importBtn')?.addEventListener('click', () => this.importTree());
-    }
+    } 
 
     /**
      * 鼠标按下处理
@@ -173,6 +181,9 @@ class BehaviorTreeEditor {
         } else {
             this.selectNode(node);
         }
+        
+        // 立即渲染以更新选中效果
+        this.render();
         
         // 开始拖拽
         this.startDrag(node, event);
@@ -340,6 +351,12 @@ class BehaviorTreeEditor {
             },
             { type: 'separator' },
             {
+                icon: 'fas fa-plus',
+                text: '创建子节点',
+                disabled: !node.canHaveChildren(),
+                submenu: this.createChildNodeSubmenu(node)
+            },
+            {
                 icon: 'fas fa-link',
                 text: '开始连接',
                 action: () => this.startConnectionMode(node)
@@ -381,41 +398,167 @@ class BehaviorTreeEditor {
     }
 
     /**
+     * 创建子节点子菜单
+     */
+    createChildNodeSubmenu(parentNode) {
+        if (!parentNode.canHaveChildren()) {
+            return [];
+        }
+
+        return [
+            {
+                icon: 'fas fa-code-branch',
+                text: '选择器 Selector',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.SELECTOR)
+            },
+            {
+                icon: 'fas fa-list-ol',
+                text: '序列器 Sequence',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.SEQUENCE)
+            },
+            {
+                icon: 'fas fa-grip-lines',
+                text: '并行器 Parallel',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.PARALLEL)
+            },
+            { type: 'separator' },
+            {
+                icon: 'fas fa-exchange-alt',
+                text: '反转器 Inverter',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.INVERTER)
+            },
+            {
+                icon: 'fas fa-redo',
+                text: '重复器 Repeater',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.REPEATER)
+            },
+            {
+                icon: 'fas fa-clock',
+                text: '超时器 Timeout',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.TIMEOUT)
+            },
+            { type: 'separator' },
+            {
+                icon: 'fas fa-play',
+                text: '动作节点 Action',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.ACTION)
+            },
+            {
+                icon: 'fas fa-question-circle',
+                text: '条件节点 Condition',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.CONDITION)
+            },
+            {
+                icon: 'fas fa-pause',
+                text: '等待节点 Wait',
+                action: () => this.addChildNodeToParent(parentNode, NodeType.WAIT)
+            }
+        ];
+    }
+
+    /**
+     * 为父节点添加子节点
+     */
+    addChildNodeToParent(parentNode, nodeType) {
+        // 计算子节点的位置
+        const childY = parentNode.y + 120; // 在父节点下方120像素
+        let childX = parentNode.x;
+        
+        // 如果父节点已有子节点，则水平分布
+        if (parentNode.children.length > 0) {
+            const siblingCount = parentNode.children.length;
+            const spacing = 150; // 子节点间距
+            const totalWidth = siblingCount * spacing;
+            childX = parentNode.x - totalWidth / 2 + siblingCount * spacing;
+        }
+        
+        // 创建新节点
+        const childNode = this.addNode(nodeType, childX, childY);
+        
+        // 连接到父节点
+        this.connectNodes(parentNode, childNode);
+        
+        // 选中新创建的节点
+        this.clearSelection();
+        this.selectNode(childNode);
+        
+        // 保存历史状态
+        this.saveHistoryState('创建子节点 Create Child Node');
+        this.markAsDirty();
+        
+        // 更新界面
+        this.render();
+        this.updateNodesList();
+        
+        this.showToast(`已为 ${parentNode.name} 创建子节点: ${childNode.name}`, 'success');
+        
+        return childNode;
+    }
+
+    /**
      * 显示画布上下文菜单
      */
     showCanvasContextMenu(canvasX, canvasY, screenX, screenY) {
         const menuItems = [
             {
                 icon: 'fas fa-code-branch',
-                text: '选择器',
-                action: () => this.addNodeAtPosition(canvasX, canvasY, 'selector')
+                text: '选择器 Selector',
+                action: () => {
+                    const node = this.addNodeAtPosition(canvasX, canvasY, NodeType.SELECTOR);
+                    if (node) {
+                        this.clearSelection();
+                        this.selectNode(node);
+                        this.render();
+                    }
+                }
             },
             {
                 icon: 'fas fa-list-ol',
-                text: '序列器',
-                action: () => this.addNodeAtPosition(canvasX, canvasY, 'sequence')
+                text: '序列器 Sequence',
+                action: () => {
+                    const node = this.addNodeAtPosition(canvasX, canvasY, NodeType.SEQUENCE);
+                    if (node) {
+                        this.clearSelection();
+                        this.selectNode(node);
+                        this.render();
+                    }
+                }
             },
             {
                 icon: 'fas fa-play',
-                text: '动作节点',
-                action: () => this.addNodeAtPosition(canvasX, canvasY, 'action')
+                text: '动作节点 Action',
+                action: () => {
+                    const node = this.addNodeAtPosition(canvasX, canvasY, NodeType.ACTION);
+                    if (node) {
+                        this.clearSelection();
+                        this.selectNode(node);
+                        this.render();
+                    }
+                }
             },
             {
                 icon: 'fas fa-question-circle',
-                text: '条件节点',
-                action: () => this.addNodeAtPosition(canvasX, canvasY, 'condition')
+                text: '条件节点 Condition',
+                action: () => {
+                    const node = this.addNodeAtPosition(canvasX, canvasY, NodeType.CONDITION);
+                    if (node) {
+                        this.clearSelection();
+                        this.selectNode(node);
+                        this.render();
+                    }
+                }
             },
             { type: 'separator' },
             {
                 icon: 'fas fa-paste',
-                text: '粘贴',
+                text: '粘贴 Paste',
                 shortcut: 'Ctrl+V',
                 disabled: !this.state.clipboard,
                 action: () => this.pasteAtPosition(canvasX, canvasY)
             },
             {
                 icon: 'fas fa-expand',
-                text: '适应画布',
+                text: '适应画布 Fit to Screen',
                 shortcut: 'F',
                 action: () => this.fitToScreen()
             }
@@ -539,17 +682,22 @@ class BehaviorTreeEditor {
             nodeType = 'action'; // 默认类型
         }
         
-        const node = this.addNode(nodeType, x, y);
+        const node = this.addNode(nodeType, x, y,this.tree.root);
         this.state.mode = 'select';
         
         // 如果有选中的节点且该节点可以有子节点，自动连接
         if (this.state.selectedNodes.size === 1) {
             const selectedNode = Array.from(this.state.selectedNodes)[0];
             if (selectedNode.canHaveChildren()) {
+                
                 this.connectNodes(selectedNode, node);
                 this.showToast(`已将 ${node.name} 连接到 ${selectedNode.name}`);
             }
         }
+        
+        // 确保画布更新
+        this.render();
+        this.updateNodesList();
         
         return node;
     }
@@ -562,30 +710,44 @@ class BehaviorTreeEditor {
         
         const selectedArray = Array.from(this.state.selectedNodes);
         this.state.clipboard = {
-            nodes: selectedArray.map(node => node.toJSON()),
+            nodes: selectedArray.map(node => this.nodeFactory.nodeToData(node)),
             timestamp: Date.now()
         };
     }
 
     /**
-     * 粘贴剪贴板内容
+     * 粘贴剪贴板内容（快捷键用）
      */
     pasteClipboard() {
         if (!this.state.clipboard) return;
         
-        const offset = 50; // 粘贴偏移量
+        // 在画布中心粘贴
+        const rect = this.canvas.getBoundingClientRect();
+        const centerX = (rect.width / 2 - this.viewport.x) / this.viewport.zoom;
+        const centerY = (rect.height / 2 - this.viewport.y) / this.viewport.zoom;
+        
+        this.pasteAtPosition(centerX, centerY);
+    }
+    
+    /**
+     * 在指定位置粘贴
+     */
+    pasteAtPosition(x, y) {
+        if (!this.state.clipboard) return;
+        
         this.clearSelection();
         
         this.state.clipboard.nodes.forEach(nodeData => {
-            const node = BehaviorTreeNode.fromJSON(nodeData);
-            node.id = node.generateId(); // 生成新ID
-            node.setPosition(node.x + offset, node.y + offset);
+            const node = this.nodeFactory.createNodeFromData(nodeData);
+            node.setPosition(x, y);
             
             this.tree.nodes.set(node.id, node);
             this.selectNode(node);
+            
+            x += 50; // 偏移避免重叠
         });
         
-        this.saveHistoryState('粘贴节点 Paste Nodes');
+        this.saveHistoryState('粘贴节点');
         this.render();
     }
 
@@ -719,26 +881,84 @@ class BehaviorTreeEditor {
      * 更新属性面板
      */
     updatePropertyPanel() {
-        const noSelection = document.getElementById('noSelection');
-        const nodeProperties = document.getElementById('nodeProperties');
+        const propertiesPanel = document.getElementById('propertiesPanel');
+        const selectedNodeInfo = document.getElementById('selectedNodeInfo');
+        
+        if (!selectedNodeInfo) return;
         
         if (this.state.selectedNodes.size === 1) {
             const node = Array.from(this.state.selectedNodes)[0];
-            noSelection?.classList.add('hidden');
-            nodeProperties?.classList.remove('hidden');
             
-            // 更新属性字段
+            // 更新属性面板内容
+            let html = `
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium mb-1" style="color: var(--md-on-surface);">名称</label>
+                        <input type="text" id="nodeName" value="${node.name || ''}" 
+                               class="w-full px-2 py-1 text-sm rounded" placeholder="节点名称">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1" style="color: var(--md-on-surface);">类型</label>
+                        <input type="text" value="${node.type}" readonly
+                               class="w-full px-2 py-1 text-sm rounded bg-gray-100" style="cursor: not-allowed;">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1" style="color: var(--md-on-surface);">描述</label>
+                        <textarea id="nodeDescription" rows="3" 
+                                  class="w-full px-2 py-1 text-sm rounded" 
+                                  placeholder="节点描述">${node.metadata.description || ''}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-1" style="color: var(--md-on-surface);">状态</label>
+                        <span class="text-sm ${this.getStatusColor(node.status)}">${node.status}</span>
+                    </div>
+                </div>
+            `;
+            
+            selectedNodeInfo.innerHTML = html;
+            
+            // 绑定更新事件
             const nameInput = document.getElementById('nodeName');
-            const typeSelect = document.getElementById('nodeType');
             const descriptionTextarea = document.getElementById('nodeDescription');
             
-            if (nameInput) nameInput.value = node.name;
-            if (typeSelect) typeSelect.value = node.type;
-            if (descriptionTextarea) descriptionTextarea.value = node.metadata.description;
+            if (nameInput) {
+                nameInput.addEventListener('input', (e) => {
+                    node.name = e.target.value;
+                    this.updateNodesList();
+                    this.markAsDirty();
+                });
+            }
+            
+            if (descriptionTextarea) {
+                descriptionTextarea.addEventListener('input', (e) => {
+                    node.metadata.description = e.target.value;
+                    this.markAsDirty();
+                });
+            }
+        } else if (this.state.selectedNodes.size > 1) {
+            selectedNodeInfo.innerHTML = `
+                <div class="text-sm" style="color: var(--md-on-surface-variant);">
+                    已选择 ${this.state.selectedNodes.size} 个节点
+                </div>
+            `;
         } else {
-            noSelection?.classList.remove('hidden');
-            nodeProperties?.classList.add('hidden');
+            selectedNodeInfo.innerHTML = `
+                <div class="text-sm" style="color: var(--md-on-surface-variant);">
+                    点击节点查看属性
+                </div>
+            `;
         }
+    }
+    
+    getStatusColor(status) {
+        const colors = {
+            'ready': 'text-gray-500',
+            'running': 'text-blue-500',
+            'success': 'text-green-500',
+            'failure': 'text-red-500',
+            'error': 'text-orange-500'
+        };
+        return colors[status] || 'text-gray-500';
     }
 
     /**
@@ -760,24 +980,58 @@ class BehaviorTreeEditor {
      */
     importTree() {
         const fileInput = document.getElementById('fileInput');
-        fileInput?.click();
+        if (fileInput) {
+            fileInput.click();
+            
+            // 添加事件监听器（如果还没有）
+            if (!fileInput.hasAttribute('data-listener-attached')) {
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            try {
+                                const data = JSON.parse(event.target.result);
+                                this.loadTreeFromData(data);
+                                this.showToast('导入成功', 'success');
+                            } catch (error) {
+                                console.error('导入失败:', error);
+                                this.showToast('导入失败：文件格式错误', 'error');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                    fileInput.value = ''; // 清空以允许重复导入同一文件
+                });
+                fileInput.setAttribute('data-listener-attached', 'true');
+            }
+        }
     }
 
     /**
      * 从数据恢复行为树
      */
     loadTreeFromData(data) {
-        this.tree = data;
+        // 清空现有数据
+        this.tree.nodes.clear();
+        this.tree.root = null;
+        this.tree.metadata = data.metadata || {
+            name: '导入的行为树',
+            description: '',
+            version: '1.0.0',
+            created: new Date(),
+            modified: new Date()
+        };
         
-        // 重建节点映射
-        this.tree.nodes = new Map();
-        if (this.tree.root) {
-            this.tree.root = BehaviorTreeNode.fromJSON(this.tree.root);
+        // 如果有root数据，重建节点树
+        if (data.root) {
+            this.tree.root = this.nodeFactory.createNodeFromData(data.root);
             this.rebuildNodeMap(this.tree.root);
         }
         
         this.clearSelection();
         this.fitToScreen();
+        this.updateNodesList();
         this.render();
     }
 
@@ -836,18 +1090,34 @@ class BehaviorTreeEditor {
      * 添加节点
      */
     addNode(type, x = 0, y = 0) {
-        const node = new BehaviorTreeNode(type);
+        // 使用NodeFactory创建节点
+        const node = this.nodeFactory.createNode(type);
         node.setPosition(x, y);
         
         this.tree.nodes.set(node.id, node);
         
+        // 如果没有根节点且添加的是根节点类型，设置为根节点
         if (!this.tree.root && type === NodeType.ROOT) {
             this.tree.root = node;
         }
         
+        // 如果没有根节点且添加的不是根节点类型，创建一个根节点
+        if (!this.tree.root && type !== NodeType.ROOT) {
+            const rootNode = this.nodeFactory.createNode(NodeType.ROOT);
+            rootNode.setPosition(x, y - 100);
+            rootNode.name = '根节点 Root';
+            this.tree.nodes.set(rootNode.id, rootNode);
+            this.tree.root = rootNode;
+            
+            // 将新节点作为根节点的子节点
+            rootNode.addChild(node);
+        }
+
         this.saveHistoryState('添加节点 Add Node');
-        this.updateNodesList();
         this.markAsDirty();
+        
+        // 确保UI更新
+        this.updateNodesList();
         this.render();
         
         return node;
@@ -861,26 +1131,28 @@ class BehaviorTreeEditor {
         
         const nodesToDelete = Array.from(this.state.selectedNodes);
         
-        nodesToDelete.forEach(node => {
-            // 移除父子关系
+        // 递归删除节点及其所有子节点
+        const deleteNodeRecursive = (node) => {
+            // 先删除所有子节点
+            const children = [...node.children];
+            children.forEach(child => deleteNodeRecursive(child));
+            
+            // 从父节点中移除
             if (node.parent) {
                 node.parent.removeChild(node);
             }
             
-            // 移除所有子节点
-            const children = [...node.children];
-            children.forEach(child => {
-                node.removeChild(child);
-            });
-            
             // 从树中移除
             this.tree.nodes.delete(node.id);
             
-            // 如果是根节点，清空根节点
+            // 如果是根节点，清空根节点引用
             if (this.tree.root === node) {
                 this.tree.root = null;
             }
-        });
+        };
+        
+        // 删除所有选中的节点
+        nodesToDelete.forEach(node => deleteNodeRecursive(node));
         
         this.clearSelection();
         this.updateNodesList();
@@ -917,6 +1189,8 @@ class BehaviorTreeEditor {
         node.isSelected = true;
         this.updatePropertyPanel();
         this.updateNodesList();
+        // 立即渲染以更新选中效果
+        this.render();
     }
 
     /**
@@ -928,7 +1202,12 @@ class BehaviorTreeEditor {
             node.isSelected = false;
         } else {
             this.selectNode(node);
+            return; // selectNode已经会调用render()
         }
+        this.updatePropertyPanel();
+        this.updateNodesList();
+        // 立即渲染以更新选中效果
+        this.render();
     }
 
     /**
@@ -941,6 +1220,8 @@ class BehaviorTreeEditor {
         this.state.selectedNodes.clear();
         this.updatePropertyPanel();
         this.updateNodesList();
+        // 立即渲染以更新选中效果
+        this.render();
     }
 
     /**
@@ -1059,8 +1340,14 @@ class BehaviorTreeEditor {
      * 保存历史状态
      */
     saveHistoryState(description) {
+        // 创建树的深拷贝，但转换节点为数据格式
+        const treeData = {
+            root: this.tree.root ? this.nodeFactory.nodeToData(this.tree.root) : null,
+            metadata: { ...this.tree.metadata }
+        };
+        
         const state = {
-            tree: JSON.parse(JSON.stringify(this.tree)),
+            tree: treeData,
             description,
             timestamp: Date.now()
         };
@@ -1110,12 +1397,14 @@ class BehaviorTreeEditor {
      * 恢复状态
      */
     restoreState(state) {
-        this.tree = state.tree;
+        // 清空现有数据
+        this.tree.nodes.clear();
+        this.tree.root = null;
+        this.tree.metadata = state.tree.metadata;
         
         // 重建节点对象
-        this.tree.nodes = new Map();
-        if (this.tree.root) {
-            this.tree.root = BehaviorTreeNode.fromJSON(this.tree.root);
+        if (state.tree.root) {
+            this.tree.root = this.nodeFactory.createNodeFromData(state.tree.root);
             this.rebuildNodeMap(this.tree.root);
         }
         
@@ -1127,8 +1416,20 @@ class BehaviorTreeEditor {
      * 重建节点映射
      */
     rebuildNodeMap(node) {
-        this.tree.nodes.set(node.id, node);
-        node.children.forEach(child => this.rebuildNodeMap(child));
+        if (!node) return;
+        
+        // 清空现有映射
+        this.tree.nodes.clear();
+        
+        // 递归添加所有节点到映射
+        const addToMap = (n) => {
+            this.tree.nodes.set(n.id, n);
+            if (n.children && n.children.length > 0) {
+                n.children.forEach(child => addToMap(child));
+            }
+        };
+        
+        addToMap(node);
     }
 
     /**
@@ -1172,10 +1473,19 @@ class BehaviorTreeEditor {
      * 渲染
      */
     render() {
-        this.updatePerformanceStats();
-        this.renderer.render(this.tree, this.viewport);
-        this.updateGridBackground();
-        this.renderer.updateFPS();
+        // 取消之前的渲染请求
+        if (this.renderRequestId) {
+            cancelAnimationFrame(this.renderRequestId);
+        }
+        
+        // 使用requestAnimationFrame确保渲染在下一帧进行
+        this.renderRequestId = requestAnimationFrame(() => {
+            this.updatePerformanceStats();
+            this.renderer.render(this.tree, this.viewport);
+            this.updateGridBackground();
+            this.renderer.updateFPS();
+            this.renderRequestId = null;
+        });
     }
 
     /**
@@ -1220,32 +1530,20 @@ class BehaviorTreeEditor {
         }
         
         const toast = document.createElement('div');
-        toast.className = 'toast-message';
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--md-surface-container-high);
-            color: var(--md-on-surface);
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--md-outline-variant);
-            backdrop-filter: blur(10px);
-            z-index: 10000;
-            font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            animation: slideIn 0.3s ease-out;
-            max-width: 300px;
+        toast.className = 'toast toast-info';
+        toast.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-info-circle mr-2"></i>
+                <span>${message}</span>
+            </div>
         `;
-        toast.textContent = message;
         
         document.body.appendChild(toast);
         
         // 3秒后自动移除
         setTimeout(() => {
             if (toast.parentNode) {
-                toast.style.animation = 'slideOut 0.3s ease-in';
-                setTimeout(() => toast.remove(), 300);
+                toast.parentNode.removeChild(toast);
             }
         }, 3000);
     }
@@ -1255,10 +1553,12 @@ class BehaviorTreeEditor {
      */
     exportTree() {
         const data = {
-            ...this.tree,
+            root: this.tree.root ? this.nodeFactory.nodeToData(this.tree.root) : null,
             metadata: {
                 ...this.tree.metadata,
-                exported: new Date()
+                exported: new Date(),
+                nodeCount: this.tree.nodes.size,
+                version: '2.0.0'
             }
         };
         
@@ -1266,9 +1566,11 @@ class BehaviorTreeEditor {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${this.tree.metadata.name}.json`;
+        a.download = `${this.tree.metadata.name || 'behavior_tree'}_${Date.now()}.json`;
         a.click();
         URL.revokeObjectURL(url);
+        
+        this.showToast('导出成功', 'success');
     }
 
     // ==================== 右键菜单系统 ====================
@@ -1459,18 +1761,23 @@ class BehaviorTreeEditor {
     /**
      * 编辑选中节点
      */
-    editSelectedNodes() {
+    async editSelectedNodes() {
         if (this.state.selectedNodes.size === 0) return;
         
         const node = Array.from(this.state.selectedNodes)[0];
-        const newName = prompt('请输入节点名称:', node.name || node.type);
         
-        if (newName !== null && newName.trim() !== '') {
-            this.state.selectedNodes.forEach(n => {
-                n.name = newName.trim();
-            });
-            this.saveHistoryState('编辑节点名称');
-            this.render();
+        try {
+            const newName = await window.prompt('请输入节点名称:', node.name || node.type, '编辑节点');
+            
+            if (newName !== null && newName.trim() !== '') {
+                this.state.selectedNodes.forEach(n => {
+                    n.name = newName.trim();
+                });
+                this.saveHistoryState('编辑节点名称');
+                this.render();
+            }
+        } catch (error) {
+            // 用户取消了输入
         }
     }
 
@@ -1484,8 +1791,8 @@ class BehaviorTreeEditor {
         const newNodes = [];
         
         this.state.selectedNodes.forEach(node => {
-            const newNode = BehaviorTreeNode.fromJSON(node.toJSON());
-            newNode.id = newNode.generateId();
+            const nodeData = this.nodeFactory.nodeToData(node);
+            const newNode = this.nodeFactory.createNodeFromData(nodeData);
             newNode.setPosition(node.x + offset, node.y + offset);
             
             this.tree.nodes.set(newNode.id, newNode);
@@ -1516,8 +1823,7 @@ class BehaviorTreeEditor {
         this.clearSelection();
         
         this.state.clipboard.nodes.forEach(nodeData => {
-            const node = BehaviorTreeNode.fromJSON(nodeData);
-            node.id = node.generateId();
+            const node = this.nodeFactory.createNodeFromData(nodeData);
             node.setPosition(x, y);
             
             this.tree.nodes.set(node.id, node);
@@ -1736,15 +2042,19 @@ class BehaviorTreeEditor {
     /**
      * 添加节点标签
      */
-    addNodeTag(node) {
-        const tag = prompt('请输入标签:', node.tag || '');
-        
-        if (tag !== null) {
-            node.tag = tag.trim();
-            this.render();
+    async addNodeTag(node) {
+        try {
+            const tag = await window.prompt('请输入标签:', node.tag || '', '添加标签');
             
-            const message = tag.trim() ? '已添加标签' : '已移除标签';
-            this.showMessage(message);
+            if (tag !== null) {
+                node.tag = tag.trim();
+                this.render();
+                
+                const message = tag.trim() ? '已添加标签' : '已移除标签';
+                this.showMessage(message);
+            }
+        } catch (error) {
+            // 用户取消了输入
         }
     }
 
@@ -1839,20 +2149,26 @@ class BehaviorTreeEditor {
         const nodes = Array.from(this.tree.nodes.values());
         
         if (nodes.length === 0) {
-            nodesList.innerHTML = '<div class="text-center text-sm" style="color: var(--md-on-surface-variant);">暂无节点</div>';
+            nodesList.innerHTML = '<div class="text-center py-4" style="color: var(--md-on-surface-variant);"><i class="fas fa-plus-circle mb-2"></i><p class="text-sm">暂无节点</p></div>';
             return;
         }
 
         nodesList.innerHTML = nodes.map(node => {
             const isSelected = this.state.selectedNodes.has(node);
             return `
-                <div class="node-item p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'hover:bg-gray-200'}" 
+                <div class="node-item md-surface-variant p-3 rounded-lg cursor-pointer hover:opacity-80 transition-colors shadow-sm ${isSelected ? 'bg-blue-600 text-white' : ''}" 
                      data-node-id="${node.id}">
-                    <div class="flex items-center">
-                        <i class="${node.getIcon()} mr-2"></i>
-                        <span class="text-sm font-medium">${node.name || node.type}</span>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="${node.getIcon()} text-sm" style="color: ${node.metadata.color};"></i>
+                            <span class="text-sm font-medium" style="color: var(--md-on-surface-variant);">${node.name || node.type}</span>
+                        </div>
+                        <div class="flex space-x-1">
+                            ${node.status === 'success' ? '<i class="fas fa-check text-xs" style="color: var(--md-success);" title="成功"></i>' : ''}
+                            ${node.status === 'failure' ? '<i class="fas fa-times text-xs" style="color: var(--md-error);" title="失败"></i>' : ''}
+                            ${node.status === 'running' ? '<i class="fas fa-play text-xs" style="color: var(--md-warning);" title="运行中"></i>' : ''}
+                        </div>
                     </div>
-                    <div class="text-xs opacity-75 ml-5">ID: ${node.id}</div>
                 </div>
             `;
         }).join('');
@@ -1865,7 +2181,7 @@ class BehaviorTreeEditor {
                 if (node) {
                     this.clearSelection();
                     this.selectNode(node);
-                    this.render();
+                    // selectNode和clearSelection方法已经会调用render()，无需重复调用
                 }
             });
         });
@@ -1922,12 +2238,10 @@ class BehaviorTreeEditor {
             }
         }, this.options.autoSaveInterval);
 
-        // 页面关闭前保存
-        window.addEventListener('beforeunload', (e) => {
+        // 页面关闭前静默保存，不弹窗
+        window.addEventListener('beforeunload', () => {
             if (this.autoSave.isDirty) {
                 this.performAutoSave();
-                e.preventDefault();
-                e.returnValue = '您有未保存的更改，确定要离开吗？';
             }
         });
     }
@@ -1937,7 +2251,15 @@ class BehaviorTreeEditor {
      */
     performAutoSave() {
         try {
-            const data = this.exportTree();
+            const data = {
+                root: this.tree.root ? this.nodeFactory.nodeToData(this.tree.root) : null,
+                metadata: {
+                    ...this.tree.metadata,
+                    autoSaved: new Date(),
+                    nodeCount: this.tree.nodes.size,
+                    version: '2.0.0'
+                }
+            };
             const key = `behaviorTree_autosave_${Date.now()}`;
             localStorage.setItem(key, JSON.stringify(data));
             localStorage.setItem('behaviorTree_latest_autosave', key);

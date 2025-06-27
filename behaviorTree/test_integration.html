@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>节点系统集成测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #canvas {
+            border: 1px solid #ccc;
+            background: #fff;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>行为树节点系统集成测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 节点系统基础测试</h2>
+        <button onclick="testNodeSystem()">测试节点系统</button>
+        <div id="nodeSystemResults"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 编辑器集成测试</h2>
+        <button onclick="testEditorIntegration()">测试编辑器集成</button>
+        <canvas id="testCanvas" width="800" height="400"></canvas>
+        <div id="editorResults"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 节点创建测试</h2>
+        <button onclick="testNodeCreation()">测试节点创建</button>
+        <div id="nodeCreationResults"></div>
+    </div>
+
+    <!-- 引入所有必要的脚本 -->
+    <script src="nodes/BaseNode.js"></script>
+    <script src="nodes/SelectorNode.js"></script>
+    <script src="nodes/SequenceNode.js"></script>
+    <script src="nodes/ParallelNode.js"></script>
+    <script src="nodes/InverterNode.js"></script>
+    <script src="nodes/RepeaterNode.js"></script>
+    <script src="nodes/ActionNode.js"></script>
+    <script src="nodes/ConditionNode.js"></script>
+    <script src="nodes/NodeFactory.js"></script>
+    <script src="nodes/index.js"></script>
+    <script src="BehaviorTreeRenderer.js"></script>
+    <script src="BehaviorTreeSimulator.js"></script>
+    <script src="BehaviorTreeTemplates.js"></script>
+    <script src="BehaviorTreeEditor.js"></script>
+
+    <script>
+        function addResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            container.appendChild(div);
+        }
+
+        function clearResults(containerId) {
+            document.getElementById(containerId).innerHTML = '';
+        }
+
+        function testNodeSystem() {
+            clearResults('nodeSystemResults');
+            
+            try {
+                // 测试NodeFactory
+                const factory = new NodeFactory();
+                addResult('nodeSystemResults', '✓ NodeFactory 创建成功', 'success');
+                
+                // 测试节点创建
+                const selectorNode = factory.createNode(NodeType.SELECTOR);
+                addResult('nodeSystemResults', `✓ 创建选择器节点: ${selectorNode.name}`, 'success');
+                
+                const actionNode = factory.createNode(NodeType.ACTION);
+                addResult('nodeSystemResults', `✓ 创建动作节点: ${actionNode.name}`, 'success');
+                
+                // 测试节点连接
+                selectorNode.addChild(actionNode);
+                addResult('nodeSystemResults', `✓ 节点连接成功，子节点数量: ${selectorNode.children.length}`, 'success');
+                
+                // 测试节点序列化
+                const nodeData = factory.nodeToData(selectorNode);
+                addResult('nodeSystemResults', '✓ 节点序列化成功', 'success');
+                
+                const restoredNode = factory.createNodeFromData(nodeData);
+                addResult('nodeSystemResults', `✓ 节点反序列化成功: ${restoredNode.name}`, 'success');
+                
+                addResult('nodeSystemResults', '🎉 节点系统测试全部通过！', 'success');
+                
+            } catch (error) {
+                addResult('nodeSystemResults', `❌ 节点系统测试失败: ${error.message}`, 'error');
+                console.error('节点系统测试错误:', error);
+            }
+        }
+
+        function testEditorIntegration() {
+            clearResults('editorResults');
+            
+            try {
+                // 创建编辑器实例
+                const editor = new BehaviorTreeEditor('testCanvas', {
+                    gridSize: 20,
+                    snapToGrid: false,
+                    showGrid: false
+                });
+                
+                addResult('editorResults', '✓ 编辑器创建成功', 'success');
+                
+                // 测试节点工厂是否正确集成
+                if (editor.nodeFactory) {
+                    addResult('editorResults', '✓ 节点工厂集成成功', 'success');
+                } else {
+                    addResult('editorResults', '❌ 节点工厂集成失败', 'error');
+                    return;
+                }
+                
+                // 测试添加节点
+                const node = editor.addNode(NodeType.SELECTOR, 100, 100);
+                if (node && node.type === NodeType.SELECTOR) {
+                    addResult('editorResults', `✓ 添加节点成功: ${node.name}`, 'success');
+                } else {
+                    addResult('editorResults', '❌ 添加节点失败', 'error');
+                    return;
+                }
+                
+                // 测试节点数量
+                if (editor.tree.nodes.size > 0) {
+                    addResult('editorResults', `✓ 节点已添加到树中，总数: ${editor.tree.nodes.size}`, 'success');
+                } else {
+                    addResult('editorResults', '❌ 节点未添加到树中', 'error');
+                }
+                
+                addResult('editorResults', '🎉 编辑器集成测试通过！', 'success');
+                
+            } catch (error) {
+                addResult('editorResults', `❌ 编辑器集成测试失败: ${error.message}`, 'error');
+                console.error('编辑器集成测试错误:', error);
+            }
+        }
+
+        function testNodeCreation() {
+            clearResults('nodeCreationResults');
+            
+            try {
+                const factory = new NodeFactory();
+                const nodeTypes = [NodeType.ROOT, NodeType.SELECTOR, NodeType.SEQUENCE, NodeType.PARALLEL, NodeType.INVERTER, NodeType.REPEATER, NodeType.ACTION, NodeType.CONDITION];
+                
+                nodeTypes.forEach(type => {
+                    try {
+                        const node = factory.createNode(type);
+                        addResult('nodeCreationResults', `✓ ${type} 节点创建成功: ${node.name}`, 'success');
+                    } catch (error) {
+                        addResult('nodeCreationResults', `❌ ${type} 节点创建失败: ${error.message}`, 'error');
+                    }
+                });
+                
+                addResult('nodeCreationResults', '🎉 所有节点类型创建测试完成！', 'info');
+                
+            } catch (error) {
+                addResult('nodeCreationResults', `❌ 节点创建测试失败: ${error.message}`, 'error');
+                console.error('节点创建测试错误:', error);
+            }
+        }
+
+        // 页面加载完成后运行基础测试
+        window.addEventListener('load', () => {
+            console.log('页面加载完成，开始基础测试...');
+            setTimeout(() => {
+                testNodeSystem();
+            }, 100);
+        });
+    </script>
+</body>
+</html> 

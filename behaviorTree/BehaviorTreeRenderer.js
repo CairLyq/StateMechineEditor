@@ -143,8 +143,22 @@ class BehaviorTreeRenderer {
         
         // 绘制边框
         this.ctx.strokeStyle = style.borderColor;
-        this.ctx.lineWidth = node.isSelected ? config.borderWidth * 2 : config.borderWidth;
+        this.ctx.lineWidth = node.isSelected ? config.borderWidth * 3 : config.borderWidth;
+        
+        // 为选中的节点添加发光效果
+        if (node.isSelected) {
+            this.ctx.save();
+            this.ctx.shadowColor = style.borderColor;
+            this.ctx.shadowBlur = 6;
+            this.ctx.shadowOffsetX = 0;
+            this.ctx.shadowOffsetY = 0;
+        }
+        
         this.drawRoundedRect(x, y, width, height, config.borderRadius, null, true);
+        
+        if (node.isSelected) {
+            this.ctx.restore();
+        }
         
         // 绘制状态指示器
         this.renderStatusIndicator(node);
@@ -201,8 +215,25 @@ class BehaviorTreeRenderer {
         return {
             backgroundColor,
             borderColor,
-            textColor: this.getContrastColor(backgroundColor)
+            textColor: this.getContrastColor(backgroundColor),
+            iconColor: this.getIconColor(backgroundColor)
         };
+    }
+
+    /**
+     * 获取图标颜色 - 确保图标在所有背景下都清晰可见
+     */
+    getIconColor(backgroundColor) {
+        // 对于深色背景，使用白色图标
+        // 对于浅色背景，使用深色图标
+        const contrastColor = this.getContrastColor(backgroundColor);
+        
+        // 如果背景色较深，使用更亮的白色
+        if (contrastColor === '#ffffff') {
+            return '#ffffff'; // 纯白色
+        } else {
+            return '#1a1a1a'; // 深灰色，确保在浅色背景上清晰
+        }
     }
 
     /**
@@ -240,11 +271,25 @@ class BehaviorTreeRenderer {
         const indicatorX = x + width - indicatorSize - 4;
         const indicatorY = y + 4;
         
+        this.ctx.save();
+        
+        // 添加阴影效果
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        this.ctx.shadowBlur = 2;
+        this.ctx.shadowOffsetX = 1;
+        this.ctx.shadowOffsetY = 1;
+        
+        // 绘制状态指示器
         this.ctx.beginPath();
         this.ctx.arc(indicatorX + indicatorSize / 2, indicatorY + indicatorSize / 2, 
                     indicatorSize / 2, 0, 2 * Math.PI);
         this.ctx.fillStyle = node.getStatusColor();
         this.ctx.fill();
+        
+        // 添加边框以提高可见性
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
         
         if (node.status === NodeStatus.RUNNING) {
             // 添加脉冲效果
@@ -258,6 +303,8 @@ class BehaviorTreeRenderer {
             this.ctx.fill();
             this.ctx.globalAlpha = 1;
         }
+        
+        this.ctx.restore();
     }
 
     /**
@@ -269,9 +316,16 @@ class BehaviorTreeRenderer {
         const iconX = x + 12; // 增加左边距，从8改为12
         const iconY = y + height / 2;
         
-        // 这里使用简单的图形代替字体图标
+        // 使用新的图标颜色计算
         this.ctx.save();
-        this.ctx.fillStyle = this.getNodeStyle(node).textColor;
+        const style = this.getNodeStyle(node);
+        this.ctx.fillStyle = style.iconColor;
+        
+        // 添加图标阴影以提高可见性
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+        this.ctx.shadowBlur = 2;
+        this.ctx.shadowOffsetX = 1;
+        this.ctx.shadowOffsetY = 1;
         
         switch (node.type) {
             case NodeType.SELECTOR:
@@ -534,14 +588,35 @@ class BehaviorTreeRenderer {
         const padding = 4;
         
         this.ctx.save();
+        
+        // 绘制选中的虚线边框
         this.ctx.strokeStyle = '#f59e0b';
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 5]);
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([8, 4]);
+        
+        // 添加发光效果
+        this.ctx.shadowColor = '#f59e0b';
+        this.ctx.shadowBlur = 8;
+        this.ctx.shadowOffsetX = 0;
+        this.ctx.shadowOffsetY = 0;
         
         this.drawRoundedRect(
             x - padding, y - padding,
             width + padding * 2, height + padding * 2,
             this.config.node.borderRadius + padding,
+            null, true
+        );
+        
+        // 绘制内层高亮边框
+        this.ctx.setLineDash([]);
+        this.ctx.strokeStyle = 'rgba(245, 158, 11, 0.3)';
+        this.ctx.lineWidth = 1;
+        this.ctx.shadowBlur = 0;
+        
+        this.drawRoundedRect(
+            x - 1, y - 1,
+            width + 2, height + 2,
+            this.config.node.borderRadius,
             null, true
         );
         
@@ -632,8 +707,16 @@ class BehaviorTreeRenderer {
         const r = parseInt(hexColor.slice(1, 3), 16);
         const g = parseInt(hexColor.slice(3, 5), 16);
         const b = parseInt(hexColor.slice(5, 7), 16);
+        
+        // 使用更准确的亮度计算公式
         const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness > 128 ? '#000000' : '#ffffff';
+        
+        // 使用更高的阈值，确保更好的对比度
+        if (brightness > 140) {
+            return '#000000'; // 深色文本
+        } else {
+            return '#ffffff'; // 白色文本
+        }
     }
 
     /**

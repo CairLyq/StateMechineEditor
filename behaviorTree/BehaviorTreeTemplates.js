@@ -6,6 +6,7 @@
 class BehaviorTreeTemplates {
     constructor() {
         this.templates = new Map();
+        this.categories = new Set();
         this.initializeDefaultTemplates();
     }
 
@@ -13,72 +14,80 @@ class BehaviorTreeTemplates {
      * 初始化默认模板
      */
     initializeDefaultTemplates() {
-        // 巡逻AI模板
-        this.addTemplate('patrol_ai', {
-            name: '巡逻AI Patrol AI',
-            description: '基础的巡逻AI行为模式，包含巡逻、追击、攻击等行为',
+        // 基础AI行为模板
+        this.addTemplate('basic_ai', {
+            name: '基础AI行为 Basic AI Behavior',
+            description: '包含战斗和巡逻的基础AI行为树',
             category: 'AI',
-            icon: 'fas fa-route',
+            icon: 'fas fa-robot',
             nodes: [
                 {
-                    type: 'selector',
-                    name: '主选择器 Main Selector',
+                    type: NodeType.ROOT,
+                    name: '根节点 Root',
                     x: 0,
                     y: 0,
                     children: [
                         {
-                            type: 'sequence',
-                            name: '战斗序列 Combat Sequence',
-                            x: -200,
+                            type: NodeType.SELECTOR,
+                            name: '主选择器 Main Selector',
+                            x: 0,
                             y: 100,
                             children: [
                                 {
-                                    type: 'condition',
-                                    name: '发现敌人 Enemy Detected',
-                                    x: -300,
+                                    type: NodeType.SEQUENCE,
+                                    name: '战斗序列 Combat Sequence',
+                                    x: -200,
                                     y: 200,
-                                    properties: {
-                                        conditionType: 'enemyInRange',
-                                        range: 10
-                                    }
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '发现敌人 Enemy Detected',
+                                            x: -300,
+                                            y: 200,
+                                            properties: {
+                                                conditionType: 'enemyInRange',
+                                                range: 10
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '攻击敌人 Attack Enemy',
+                                            x: -100,
+                                            y: 200,
+                                            properties: {
+                                                actionType: 'attack',
+                                                damage: 10
+                                            }
+                                        }
+                                    ]
                                 },
                                 {
-                                    type: 'action',
-                                    name: '攻击敌人 Attack Enemy',
-                                    x: -100,
-                                    y: 200,
-                                    properties: {
-                                        actionType: 'attack',
-                                        damage: 10
-                                    }
-                                }
-                            ]
-                        },
-                        {
-                            type: 'sequence',
-                            name: '巡逻序列 Patrol Sequence',
-                            x: 200,
-                            y: 100,
-                            children: [
-                                {
-                                    type: 'condition',
-                                    name: '到达巡逻点 Reached Patrol Point',
-                                    x: 100,
-                                    y: 200,
-                                    properties: {
-                                        conditionType: 'atDestination',
-                                        tolerance: 1
-                                    }
-                                },
-                                {
-                                    type: 'action',
-                                    name: '移动到下一点 Move to Next Point',
-                                    x: 300,
-                                    y: 200,
-                                    properties: {
-                                        actionType: 'moveTo',
-                                        target: 'nextPatrolPoint'
-                                    }
+                                    type: NodeType.SEQUENCE,
+                                    name: '巡逻序列 Patrol Sequence',
+                                    x: 200,
+                                    y: 100,
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '到达巡逻点 Reached Patrol Point',
+                                            x: 100,
+                                            y: 200,
+                                            properties: {
+                                                conditionType: 'atDestination',
+                                                tolerance: 1
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '移动到下一点 Move to Next Point',
+                                            x: 300,
+                                            y: 200,
+                                            properties: {
+                                                actionType: 'moveTo',
+                                                target: 'nextPatrolPoint'
+                                            }
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -95,62 +104,88 @@ class BehaviorTreeTemplates {
             icon: 'fas fa-comments',
             nodes: [
                 {
-                    type: 'sequence',
-                    name: '对话流程 Dialogue Flow',
+                    type: NodeType.ROOT,
+                    name: '根节点 Root',
                     x: 0,
                     y: 0,
                     children: [
                         {
-                            type: 'condition',
-                            name: '玩家接近 Player Nearby',
-                            x: -100,
-                            y: 100,
-                            properties: {
-                                conditionType: 'playerInRange',
-                                range: 5
-                            }
-                        },
-                        {
-                            type: 'action',
-                            name: '显示问候 Show Greeting',
+                            type: NodeType.SEQUENCE,
+                            name: '对话流程 Dialogue Flow',
                             x: 0,
-                            y: 100,
-                            properties: {
-                                actionType: 'showDialogue',
-                                text: 'Hello, traveler!'
-                            }
-                        },
-                        {
-                            type: 'selector',
-                            name: '对话选择 Dialogue Options',
-                            x: 100,
                             y: 100,
                             children: [
                                 {
-                                    type: 'sequence',
-                                    name: '任务分支 Quest Branch',
-                                    x: 50,
+                                    type: NodeType.CONDITION,
+                                    name: '玩家接近 Player Nearby',
+                                    x: -100,
+                                    y: 200,
+                                    properties: {
+                                        conditionType: 'distance',
+                                        targetType: 'player',
+                                        operator: 'less_than',
+                                        value: 5,
+                                        tolerance: 0.5
+                                    }
+                                },
+                                {
+                                    type: NodeType.ACTION,
+                                    name: '显示问候 Show Greeting',
+                                    x: 0,
+                                    y: 200,
+                                    properties: {
+                                        actionType: 'custom',
+                                        customCode: 'console.log("Hello, traveler!"); return "success";'
+                                    }
+                                },
+                                {
+                                    type: NodeType.SELECTOR,
+                                    name: '对话选择 Dialogue Options',
+                                    x: 100,
                                     y: 200,
                                     children: [
                                         {
-                                            type: 'condition',
-                                            name: '选择任务 Quest Selected',
-                                            x: 0,
-                                            y: 300
+                                            type: NodeType.SEQUENCE,
+                                            name: '任务分支 Quest Branch',
+                                            x: 50,
+                                            y: 300,
+                                            children: [
+                                                {
+                                                    type: NodeType.CONDITION,
+                                                    name: '选择任务 Quest Selected',
+                                                    x: 0,
+                                                    y: 400,
+                                                    properties: {
+                                                        conditionType: 'variable',
+                                                        variableType: 'context',
+                                                        variableName: 'questSelected',
+                                                        operator: 'equals',
+                                                        value: true
+                                                    }
+                                                },
+                                                {
+                                                    type: NodeType.ACTION,
+                                                    name: '分配任务 Assign Quest',
+                                                    x: 100,
+                                                    y: 400,
+                                                    properties: {
+                                                        actionType: 'custom',
+                                                        customCode: 'context.quest = "newQuest"; return "success";'
+                                                    }
+                                                }
+                                            ]
                                         },
                                         {
-                                            type: 'action',
-                                            name: '分配任务 Assign Quest',
-                                            x: 100,
-                                            y: 300
+                                            type: NodeType.ACTION,
+                                            name: '告别 Say Goodbye',
+                                            x: 150,
+                                            y: 300,
+                                            properties: {
+                                                actionType: 'custom',
+                                                customCode: 'console.log("Goodbye!"); return "success";'
+                                            }
                                         }
                                     ]
-                                },
-                                {
-                                    type: 'action',
-                                    name: '告别 Say Goodbye',
-                                    x: 150,
-                                    y: 200
                                 }
                             ]
                         }
@@ -167,43 +202,71 @@ class BehaviorTreeTemplates {
             icon: 'fas fa-hammer',
             nodes: [
                 {
-                    type: 'repeater',
-                    name: '收集循环 Gathering Loop',
+                    type: NodeType.ROOT,
+                    name: '根节点 Root',
                     x: 0,
                     y: 0,
-                    properties: {
-                        repeatCount: -1 // 无限循环
-                    },
                     children: [
                         {
-                            type: 'sequence',
-                            name: '收集序列 Gathering Sequence',
+                            type: NodeType.REPEATER,
+                            name: '收集循环 Gathering Loop',
                             x: 0,
                             y: 100,
+                            properties: {
+                                repeatType: 'forever',
+                                resetChildOnRepeat: true
+                            },
                             children: [
                                 {
-                                    type: 'condition',
-                                    name: '背包未满 Inventory Not Full',
-                                    x: -150,
-                                    y: 200
-                                },
-                                {
-                                    type: 'action',
-                                    name: '寻找资源 Find Resource',
-                                    x: -50,
-                                    y: 200
-                                },
-                                {
-                                    type: 'action',
-                                    name: '移动到资源 Move to Resource',
-                                    x: 50,
-                                    y: 200
-                                },
-                                {
-                                    type: 'action',
-                                    name: '收集资源 Collect Resource',
-                                    x: 150,
-                                    y: 200
+                                    type: NodeType.SEQUENCE,
+                                    name: '收集序列 Gathering Sequence',
+                                    x: 0,
+                                    y: 200,
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '背包未满 Inventory Not Full',
+                                            x: -150,
+                                            y: 300,
+                                            properties: {
+                                                conditionType: 'custom',
+                                                customCode: 'return context.inventoryCount < context.maxInventory;'
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '寻找资源 Find Resource',
+                                            x: -50,
+                                            y: 300,
+                                            properties: {
+                                                actionType: 'custom',
+                                                customCode: 'context.nearestResource = findNearestResource(); return "success";'
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '移动到资源 Move to Resource',
+                                            x: 50,
+                                            y: 300,
+                                            properties: {
+                                                actionType: 'move',
+                                                targetType: 'resource',
+                                                speed: 2,
+                                                stopDistance: 1
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '收集资源 Collect Resource',
+                                            x: 150,
+                                            y: 300,
+                                            properties: {
+                                                actionType: 'interact',
+                                                interactionType: 'collect',
+                                                duration: 2000
+                                            }
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -220,25 +283,25 @@ class BehaviorTreeTemplates {
             icon: 'fas fa-sitemap',
             nodes: [
                 {
-                    type: 'selector',
+                    type: NodeType.SELECTOR,
                     name: '状态选择器 State Selector',
                     x: 0,
                     y: 0,
                     children: [
                         {
-                            type: 'sequence',
+                            type: NodeType.SEQUENCE,
                             name: '空闲状态 Idle State',
                             x: -200,
                             y: 100,
                             children: [
                                 {
-                                    type: 'condition',
+                                    type: NodeType.CONDITION,
                                     name: '无任务 No Task',
                                     x: -200,
                                     y: 200
                                 },
                                 {
-                                    type: 'action',
+                                    type: NodeType.ACTION,
                                     name: '播放空闲动画 Play Idle Animation',
                                     x: -200,
                                     y: 300
@@ -246,19 +309,19 @@ class BehaviorTreeTemplates {
                             ]
                         },
                         {
-                            type: 'sequence',
+                            type: NodeType.SEQUENCE,
                             name: '移动状态 Moving State',
                             x: 0,
                             y: 100,
                             children: [
                                 {
-                                    type: 'condition',
+                                    type: NodeType.CONDITION,
                                     name: '有移动目标 Has Move Target',
                                     x: 0,
                                     y: 200
                                 },
                                 {
-                                    type: 'action',
+                                    type: NodeType.ACTION,
                                     name: '执行移动 Execute Movement',
                                     x: 0,
                                     y: 300
@@ -266,19 +329,19 @@ class BehaviorTreeTemplates {
                             ]
                         },
                         {
-                            type: 'sequence',
+                            type: NodeType.SEQUENCE,
                             name: '工作状态 Working State',
                             x: 200,
                             y: 100,
                             children: [
                                 {
-                                    type: 'condition',
+                                    type: NodeType.CONDITION,
                                     name: '有工作任务 Has Work Task',
                                     x: 200,
                                     y: 200
                                 },
                                 {
-                                    type: 'action',
+                                    type: NodeType.ACTION,
                                     name: '执行工作 Execute Work',
                                     x: 200,
                                     y: 300
@@ -293,37 +356,311 @@ class BehaviorTreeTemplates {
         // 错误处理模板
         this.addTemplate('error_handling', {
             name: '错误处理 Error Handling',
-            description: '通用错误处理和重试机制',
+            description: '包含重试机制的错误处理行为树',
             category: 'Utility',
             icon: 'fas fa-exclamation-triangle',
             nodes: [
                 {
-                    type: 'retry',
-                    name: '重试器 Retry Handler',
+                    type: NodeType.ROOT,
+                    name: '根节点 Root',
                     x: 0,
                     y: 0,
-                    properties: {
-                        maxRetries: 3,
-                        retryDelay: 1000
-                    },
                     children: [
                         {
-                            type: 'sequence',
-                            name: '尝试执行 Try Execute',
+                            type: NodeType.REPEATER,
+                            name: '重试器 Retry Handler',
+                            x: 0,
+                            y: 100,
+                            properties: {
+                                repeatType: 'until_success',
+                                maxRepeats: 3,
+                                resetChildOnRepeat: true
+                            },
+                            children: [
+                                {
+                                    type: NodeType.SEQUENCE,
+                                    name: '尝试执行 Try Execute',
+                                    x: 0,
+                                    y: 200,
+                                    children: [
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '执行任务 Execute Task',
+                                            x: -50,
+                                            y: 300,
+                                            properties: {
+                                                actionType: 'custom',
+                                                customCode: 'return Math.random() > 0.5 ? "success" : "failure";'
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '检查结果 Check Result',
+                                            x: 50,
+                                            y: 300,
+                                            properties: {
+                                                conditionType: 'custom',
+                                                customCode: 'return context.lastResult === "success";'
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        // 巡逻AI模板
+        this.addTemplate('patrol_ai', {
+            name: '巡逻AI Patrol AI',
+            description: '智能巡逻系统，包含路径规划和敌人检测',
+            category: 'AI',
+            icon: 'fas fa-route',
+            nodes: [
+                {
+                    type: NodeType.ROOT,
+                    name: '根节点 Root',
+                    x: 0,
+                    y: 0,
+                    children: [
+                        {
+                            type: NodeType.SELECTOR,
+                            name: '主选择器 Main Selector',
                             x: 0,
                             y: 100,
                             children: [
                                 {
-                                    type: 'action',
-                                    name: '执行任务 Execute Task',
-                                    x: -50,
-                                    y: 200
+                                    type: NodeType.SEQUENCE,
+                                    name: '敌人检测序列 Enemy Detection',
+                                    x: -200,
+                                    y: 200,
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '检测敌人 Detect Enemy',
+                                            x: -200,
+                                            y: 300,
+                                            properties: {
+                                                conditionType: 'distance',
+                                                targetType: 'enemy',
+                                                operator: 'less_than',
+                                                value: 10,
+                                                tolerance: 0.5
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '追击敌人 Chase Enemy',
+                                            x: -200,
+                                            y: 400,
+                                            properties: {
+                                                actionType: 'move',
+                                                targetType: 'enemy',
+                                                speed: 5,
+                                                stopDistance: 2
+                                            }
+                                        }
+                                    ]
                                 },
                                 {
-                                    type: 'condition',
-                                    name: '检查结果 Check Result',
-                                    x: 50,
-                                    y: 200
+                                    type: NodeType.REPEATER,
+                                    name: '巡逻循环 Patrol Loop',
+                                    x: 200,
+                                    y: 200,
+                                    properties: {
+                                        repeatType: 'forever',
+                                        resetChildOnRepeat: false
+                                    },
+                                    children: [
+                                        {
+                                            type: NodeType.SEQUENCE,
+                                            name: '巡逻序列 Patrol Sequence',
+                                            x: 200,
+                                            y: 300,
+                                            children: [
+                                                {
+                                                    type: NodeType.ACTION,
+                                                    name: '移动到巡逻点 Move to Patrol Point',
+                                                    x: 100,
+                                                    y: 400,
+                                                    properties: {
+                                                        actionType: 'move',
+                                                        targetType: 'patrol_point',
+                                                        speed: 2,
+                                                        stopDistance: 1
+                                                    }
+                                                },
+                                                {
+                                                    type: NodeType.ACTION,
+                                                    name: '等待 Wait',
+                                                    x: 300,
+                                                    y: 400,
+                                                    properties: {
+                                                        actionType: 'wait',
+                                                        duration: 2000
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        // 决策树模板
+        this.addTemplate('decision_tree', {
+            name: '决策树 Decision Tree',
+            description: '基于条件的复杂决策系统',
+            category: 'AI',
+            icon: 'fas fa-sitemap',
+            nodes: [
+                {
+                    type: NodeType.ROOT,
+                    name: '根节点 Root',
+                    x: 0,
+                    y: 0,
+                    children: [
+                        {
+                            type: NodeType.SELECTOR,
+                            name: '决策选择器 Decision Selector',
+                            x: 0,
+                            y: 100,
+                            children: [
+                                {
+                                    type: NodeType.SEQUENCE,
+                                    name: '紧急情况 Emergency',
+                                    x: -300,
+                                    y: 200,
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '健康值低 Low Health',
+                                            x: -300,
+                                            y: 300,
+                                            properties: {
+                                                conditionType: 'health',
+                                                healthType: 'percentage',
+                                                operator: 'less_than',
+                                                value: 30
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '寻找治疗 Find Healing',
+                                            x: -300,
+                                            y: 400,
+                                            properties: {
+                                                actionType: 'move',
+                                                targetType: 'healing_item',
+                                                speed: 3
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    type: NodeType.SEQUENCE,
+                                    name: '战斗模式 Combat Mode',
+                                    x: -100,
+                                    y: 200,
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '有敌人 Has Enemy',
+                                            x: -100,
+                                            y: 300,
+                                            properties: {
+                                                conditionType: 'distance',
+                                                targetType: 'enemy',
+                                                operator: 'less_than',
+                                                value: 15
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.PARALLEL,
+                                            name: '战斗行为 Combat Behavior',
+                                            x: -100,
+                                            y: 400,
+                                            properties: {
+                                                strategy: 'require_all',
+                                                allowPartialSuccess: false
+                                            },
+                                            children: [
+                                                {
+                                                    type: NodeType.ACTION,
+                                                    name: '攻击 Attack',
+                                                    x: -150,
+                                                    y: 500,
+                                                    properties: {
+                                                        actionType: 'attack',
+                                                        targetType: 'nearest_enemy',
+                                                        damage: 10,
+                                                        range: 5
+                                                    }
+                                                },
+                                                {
+                                                    type: NodeType.ACTION,
+                                                    name: '保持距离 Keep Distance',
+                                                    x: -50,
+                                                    y: 500,
+                                                    properties: {
+                                                        actionType: 'move',
+                                                        targetType: 'away_from_enemy',
+                                                        speed: 2,
+                                                        minDistance: 3
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    type: NodeType.SEQUENCE,
+                                    name: '探索模式 Exploration Mode',
+                                    x: 100,
+                                    y: 200,
+                                    children: [
+                                        {
+                                            type: NodeType.CONDITION,
+                                            name: '无任务 No Task',
+                                            x: 100,
+                                            y: 300,
+                                            properties: {
+                                                conditionType: 'variable',
+                                                variableType: 'context',
+                                                variableName: 'currentTask',
+                                                operator: 'equals',
+                                                value: null
+                                            }
+                                        },
+                                        {
+                                            type: NodeType.ACTION,
+                                            name: '随机移动 Random Move',
+                                            x: 100,
+                                            y: 400,
+                                            properties: {
+                                                actionType: 'move',
+                                                targetType: 'random_position',
+                                                speed: 1,
+                                                radius: 20
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    type: NodeType.ACTION,
+                                    name: '空闲 Idle',
+                                    x: 300,
+                                    y: 200,
+                                    properties: {
+                                        actionType: 'wait',
+                                        duration: 1000
+                                    }
                                 }
                             ]
                         }
@@ -431,10 +768,15 @@ class BehaviorTreeTemplates {
     createNodesFromTemplate(templateNodes, offsetX = 0, offsetY = 0) {
         const createdNodes = [];
         const nodeMap = new Map();
-
+        
+        // 确保有NodeFactory实例
+        if (typeof NodeFactory === 'undefined') {
+            throw new Error('NodeFactory not available');
+        }
+        
         // 创建所有节点
         const createNode = (nodeData, parent = null) => {
-            const node = new BehaviorTreeNode(nodeData.type, nodeData.name);
+            const node = nodeFactory.createNode(nodeData.type, nodeData.name);
             node.setPosition(nodeData.x + offsetX, nodeData.y + offsetY);
             
             if (nodeData.properties) {

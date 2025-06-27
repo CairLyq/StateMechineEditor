@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行为树节点系统测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>行为树节点系统测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 基础组件加载测试</h2>
+        <div id="loadTest"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 节点创建测试</h2>
+        <div id="createTest"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 节点工厂测试</h2>
+        <div id="factoryTest"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 节点执行测试</h2>
+        <div id="executeTest"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. 节点属性配置测试</h2>
+        <div id="configTest"></div>
+    </div>
+
+    <!-- 加载脚本 -->
+    <script src="BehaviorTreeNode.js"></script>
+    
+    <!-- 行为树节点模块 -->
+    <script src="nodes/BaseNode.js"></script>
+    <script src="nodes/SelectorNode.js"></script>
+    <script src="nodes/SequenceNode.js"></script>
+    <script src="nodes/ParallelNode.js"></script>
+    <script src="nodes/InverterNode.js"></script>
+    <script src="nodes/RepeaterNode.js"></script>
+    <script src="nodes/ActionNode.js"></script>
+    <script src="nodes/ConditionNode.js"></script>
+    <script src="nodes/NodeFactory.js"></script>
+    <script src="nodes/index.js"></script>
+    
+    <script>
+        function log(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            container.appendChild(div);
+        }
+        
+        function runTests() {
+            // 1. 基础组件加载测试
+            testLoading();
+            
+            // 2. 节点创建测试
+            testNodeCreation();
+            
+            // 3. 节点工厂测试
+            testNodeFactory();
+            
+            // 4. 节点执行测试
+            testNodeExecution();
+            
+            // 5. 节点属性配置测试
+            testNodeConfiguration();
+        }
+        
+        function testLoading() {
+            const requiredClasses = [
+                'BaseNode', 'NodeStatus', 'NodeType',
+                'SelectorNode', 'SequenceNode', 'ParallelNode',
+                'InverterNode', 'RepeaterNode',
+                'ActionNode', 'ConditionNode',
+                'NodeFactory'
+            ];
+            
+            let allLoaded = true;
+            const missingClasses = [];
+            
+            for (const className of requiredClasses) {
+                if (typeof window[className] === 'undefined') {
+                    allLoaded = false;
+                    missingClasses.push(className);
+                }
+            }
+            
+            if (allLoaded) {
+                log('loadTest', '✅ 所有必需的类都已成功加载', 'success');
+            } else {
+                log('loadTest', `❌ 缺少以下类: ${missingClasses.join(', ')}`, 'error');
+            }
+        }
+        
+        function testNodeCreation() {
+            try {
+                // 测试创建各种类型的节点
+                const selector = new SelectorNode('测试选择器');
+                const sequence = new SequenceNode('测试序列器');
+                const parallel = new ParallelNode('测试并行器');
+                const inverter = new InverterNode('测试反转器');
+                const repeater = new RepeaterNode('测试重复器');
+                const action = new ActionNode('测试动作');
+                const condition = new ConditionNode('测试条件');
+                
+                log('createTest', '✅ 所有节点类型都可以正常创建', 'success');
+                
+                // 测试节点属性
+                log('createTest', `选择器类型: ${selector.type}`, 'info');
+                log('createTest', `序列器名称: ${sequence.name}`, 'info');
+                log('createTest', `并行器ID: ${parallel.id}`, 'info');
+                
+            } catch (error) {
+                log('createTest', `❌ 节点创建失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function testNodeFactory() {
+            try {
+                if (typeof nodeFactory === 'undefined') {
+                    log('factoryTest', '❌ NodeFactory 未加载', 'error');
+                    return;
+                }
+                
+                // 测试工厂创建节点
+                const selector = nodeFactory.createNode(NodeType.SELECTOR);
+                const action = nodeFactory.createNode(NodeType.ACTION, '工厂创建的动作');
+                
+                log('factoryTest', '✅ 节点工厂可以正常创建节点', 'success');
+                log('factoryTest', `工厂创建的选择器: ${selector.name}`, 'info');
+                log('factoryTest', `工厂创建的动作: ${action.name}`, 'info');
+                
+                // 测试节点配置
+                const config = nodeFactory.createNodeConfig(NodeType.CONDITION);
+                log('factoryTest', `条件节点配置: ${JSON.stringify(config, null, 2)}`, 'info');
+                
+                // 测试节点分类
+                const categories = nodeFactory.getNodeCategories();
+                log('factoryTest', `节点分类: ${Object.keys(categories).join(', ')}`, 'info');
+                
+            } catch (error) {
+                log('factoryTest', `❌ 节点工厂测试失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function testNodeExecution() {
+            try {
+                // 创建一个简单的行为树
+                const root = new SelectorNode('根选择器');
+                const condition = new ConditionNode('测试条件');
+                const action = new ActionNode('测试动作');
+                
+                // 设置条件节点属性
+                condition.properties.conditionType = 'custom';
+                condition.properties.conditionCode = 'return true;'; // 总是返回true
+                
+                // 设置动作节点属性
+                action.properties.actionType = 'wait';
+                action.properties.duration = 100; // 100毫秒
+                
+                // 构建树结构
+                root.addChild(condition);
+                root.addChild(action);
+                
+                // 执行测试
+                const context = {};
+                const result = root.execute(context);
+                
+                log('executeTest', '✅ 节点执行测试完成', 'success');
+                log('executeTest', `根节点执行结果: ${result}`, 'info');
+                log('executeTest', `条件节点状态: ${condition.status}`, 'info');
+                log('executeTest', `动作节点状态: ${action.status}`, 'info');
+                
+            } catch (error) {
+                log('executeTest', `❌ 节点执行测试失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function testNodeConfiguration() {
+            try {
+                const action = new ActionNode('配置测试动作');
+                
+                // 获取属性配置
+                const config = action.getPropertyConfig();
+                log('configTest', '✅ 节点属性配置获取成功', 'success');
+                log('configTest', `配置标题: ${config.title}`, 'info');
+                log('configTest', `配置属性数量: ${config.properties.length}`, 'info');
+                
+                // 测试验证
+                const validation = action.validate();
+                log('configTest', `验证结果: ${validation.isValid ? '通过' : '失败'}`, 
+                    validation.isValid ? 'success' : 'error');
+                
+                if (!validation.isValid) {
+                    log('configTest', `验证错误: ${validation.errors.join(', ')}`, 'error');
+                }
+                
+                // 测试调试信息
+                const debugInfo = action.getDebugInfo();
+                log('configTest', `调试信息: <pre>${JSON.stringify(debugInfo, null, 2)}</pre>`, 'info');
+                
+            } catch (error) {
+                log('configTest', `❌ 节点配置测试失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 页面加载完成后运行测试
+        window.addEventListener('load', function() {
+            setTimeout(runTests, 500); // 延迟500ms确保所有脚本都加载完成
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分层状态机编辑器 - Hierarchical State Machine Editor</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../../favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+    <link rel="apple-touch-icon" href="../../favicon.ico">
+    
+    <!-- TailwindCSS CDN -->
+    <script src="../../lib/tailwindcss.3.4.16.js"></script>
+    
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Framer Motion CDN -->
+    <!-- <script src="../../lib/framer-motion.js"></script> -->
+    
+    <!-- 公共模块 -->
+    <script type="module" src="../common/Constants.js"></script>
+    <script type="module" src="../common/BaseEditor.js"></script>
+    <script type="module" src="../common/UIComponents.js"></script>
+    
+    <!-- 分层状态机模块 -->
+    <script type="module" src="HierarchicalStateMachineEditor.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            /* Material Design 3 Color System */
+            --md-primary: #180536;
+            --md-primary-container: #3d1960;
+            --md-on-primary: #ffffff;
+            --md-on-primary-container: #e8ddff;
+            
+            --md-secondary: #67089c;
+            --md-secondary-container: #8a2be2;
+            --md-on-secondary: #ffffff;
+            --md-on-secondary-container: #f0e8ff;
+            
+            --md-tertiary: #7c5295;
+            --md-tertiary-container: #9d73b6;
+            --md-on-tertiary: #ffffff;
+            --md-on-tertiary-container: #f5f0ff;
+            
+            --md-surface: rgba(255, 255, 255, 0.12);
+            --md-surface-variant: rgba(255, 255, 255, 0.15);
+            --md-on-surface: #ffffff;
+            --md-on-surface-variant: #f0f0f0;
+            
+            --md-surface-container-lowest: rgba(255, 255, 255, 0.02);
+            --md-surface-container-low: rgba(255, 255, 255, 0.04);
+            --md-surface-container: rgba(255, 255, 255, 0.06);
+            --md-surface-container-high: rgba(255, 255, 255, 0.08);
+            --md-surface-container-highest: rgba(255, 255, 255, 0.12);
+            
+            --md-outline: rgba(147, 143, 153, 0.4);
+            --md-outline-variant: rgba(73, 69, 79, 0.4);
+            
+            --md-error: #ffb4ab;
+            --md-error-container: #93000a;
+            --md-on-error: #690005;
+            --md-on-error-container: #ffdad6;
+            
+            --md-success: #4caf50;
+            --md-success-container: #1b5e20;
+            --md-on-success: #ffffff;
+            --md-on-success-container: #c8e6c9;
+            
+            --md-warning: #ff9800;
+            --md-warning-container: #e65100;
+            --md-on-warning: #ffffff;
+            --md-on-warning-container: #fff3e0;
+        }
+        
+        html, body {
+            font-family: 'Inter', sans-serif;
+            color: var(--md-on-surface);
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* 禁用所有滚动条 */
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        *::-webkit-scrollbar {
+            display: none;
+        }
+        
+        html, body, * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        /* 内部滚动容器保持功能但隐藏滚动条 */
+        .max-h-64.overflow-y-auto {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .max-h-64.overflow-y-auto::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* 画布网格背景 */
+        .canvas-grid {
+            background-image: 
+                /* 粗网格线 (每120px一条，即每10个细网格，主要分割线) */
+                linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                /* 细网格线 (每12px一条，辅助网格) */
+                linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            background-size: 
+                120px 120px,
+                120px 120px,
+                12px 12px,
+                12px 12px;
+            background-position: 
+                0 0,
+                0 0,
+                0 0,
+                0 0;
+        }
+
+        /* 提高输入框和代码块的对比度 */
+        input[type="text"], input[type="checkbox"], textarea {
+            background: rgba(255, 255, 255, 0.9) !important;
+            color: #1a1a1a !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #000000 !important;
+            border: 2px solid #4caf50 !important;
+            outline: none !important;
+        }
+
+        /* Material Design 样式类 */
+        .md-surface {
+            background: var(--md-surface-container);
+            color: var(--md-on-surface);
+            border: 1px solid var(--md-outline-variant);
+        }
+        
+        .md-primary-btn {
+            background: var(--md-primary);
+            color: var(--md-on-primary);
+            border: none;
+        }
+        
+        .md-primary-btn:hover {
+            background: var(--md-primary-container);
+            box-shadow: 0 4px 12px rgba(24, 5, 54, 0.4);
+        }
+        
+        .md-secondary-btn {
+            background: var(--md-secondary);
+            color: var(--md-on-secondary);
+            border: none;
+        }
+        
+        .md-secondary-btn:hover {
+            background: var(--md-secondary-container);
+            box-shadow: 0 4px 12px rgba(103, 8, 156, 0.4);
+        }
+        
+        .md-surface-variant {
+            background: var(--md-surface-variant);
+            color: var(--md-on-surface-variant);
+        }
+
+        .tool-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 分层状态机样式 */
+        .hierarchical-state-node {
+            pointer-events: all;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            z-index: 1;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .hierarchical-state-node.level-0 {
+            border-width: 3px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .hierarchical-state-node.level-1 {
+            border-width: 2px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .hierarchical-state-node.level-2 {
+            border-width: 1px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .hierarchical-state-node.composite-state {
+            border-style: dashed;
+        }
+
+        .hierarchical-state-node.leaf-state {
+            border-style: solid;
+        }
+
+        .hierarchical-state-node:hover {
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        .expander-button {
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        .expander-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .level-indicator {
+            font-size: 8px;
+            font-weight: bold;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .hierarchical-transition {
+            pointer-events: all;
+        }
+
+        .hierarchical-transition:hover path {
+            stroke-width: 3;
+            filter: drop-shadow(0 0 4px currentColor);
+        }
+
+        /* 右键菜单样式 */
+        #contextMenu, #hierarchicalContextMenu {
+            backdrop-filter: blur(8px);
+            background: rgba(30, 30, 30, 0.9);
+            color: white;
+            animation: contextMenuFadeIn 0.15s ease-out;
+        }
+        
+        @keyframes contextMenuFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .context-menu-item:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* 预览连线动画 */
+        .preview-line {
+            animation: previewPulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes previewPulse {
+            0%, 100% {
+                opacity: 0.8;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* 分层状态机专用动画 */
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 0.9;
+            }
+        }
+
+        @keyframes slideInFromLeft {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* 工具栏动画 */
+        .tool-btn {
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        .tool-btn:nth-child(1) { animation-delay: 0.1s; }
+        .tool-btn:nth-child(2) { animation-delay: 0.2s; }
+        .tool-btn:nth-child(3) { animation-delay: 0.3s; }
+        .tool-btn:nth-child(4) { animation-delay: 0.4s; }
+        .tool-btn:nth-child(5) { animation-delay: 0.5s; }
+        .tool-btn:nth-child(6) { animation-delay: 0.6s; }
+
+        /* 侧边栏动画 */
+        .w-64 {
+            animation: slideInFromLeft 0.5s ease-out;
+        }
+
+        .w-80 {
+            animation: slideInFromRight 0.5s ease-out;
+        }
+
+        /* 分层状态节点悬停效果 */
+        .hierarchical-state-node {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hierarchical-state-node::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .hierarchical-state-node:hover::before {
+            left: 100%;
+        }
+
+        /* 层级动画 */
+        .hierarchical-state-node.level-0 {
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .hierarchical-state-node.level-1 {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .hierarchical-state-node.level-2 {
+            animation: fadeInUp 0.7s ease-out;
+        }
+
+        /* 转换线条动画 */
+        .hierarchical-transition path {
+            stroke-dasharray: 5;
+            animation: dash 1s linear infinite;
+        }
+
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -10;
+            }
+        }
+
+        /* 模拟状态高亮 */
+        .simulation-active {
+            animation: simulationGlow 2s ease-in-out infinite;
+            box-shadow: 0 0 30px var(--md-success) !important;
+        }
+
+        @keyframes simulationGlow {
+            0%, 100% {
+                box-shadow: 0 0 20px var(--md-success);
+            }
+            50% {
+                box-shadow: 0 0 40px var(--md-success);
+            }
+        }
+
+        /* 连接模式指示器 */
+        .connection-mode .hierarchical-state-node {
+            cursor: crosshair !important;
+            animation: connectionPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes connectionPulse {
+            0%, 100% {
+                border-color: rgba(255, 255, 255, 0.3);
+            }
+            50% {
+                border-color: var(--md-warning);
+                box-shadow: 0 0 15px var(--md-warning);
+            }
+        }
+
+        /* 展开/折叠动画 */
+        .expanding {
+            animation: expandNode 0.3s ease-out;
+        }
+
+        .collapsing {
+            animation: collapseNode 0.3s ease-out;
+        }
+
+        @keyframes expandNode {
+            from {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes collapseNode {
+            from {
+                transform: scale(1);
+                opacity: 1;
+            }
+            to {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+        }
+
+        /* 层级指示器动画 */
+        .level-indicator {
+            animation: levelBlink 2s ease-in-out infinite;
+        }
+
+        @keyframes levelBlink {
+            0%, 100% {
+                opacity: 0.8;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* 复合状态特效 */
+        .composite-state {
+            position: relative;
+        }
+
+        .composite-state::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            animation: compositePulse 3s ease-in-out infinite;
+        }
+
+        @keyframes compositePulse {
+            0%, 100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                transform: scale(1.02);
+            }
+        }
+
+        /* 加载状态 */
+        .loading {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* 成功/错误状态指示器 */
+        .success-indicator {
+            animation: successPulse 0.5s ease-out;
+            border-color: var(--md-success) !important;
+        }
+
+        .error-indicator {
+            animation: errorShake 0.5s ease-out;
+            border-color: var(--md-error) !important;
+        }
+
+        @keyframes successPulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes errorShake {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            25% {
+                transform: translateX(-5px);
+            }
+            75% {
+                transform: translateX(5px);
+            }
+        }
+
+        /* 自动布局动画 */
+        .auto-layout-transition {
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 层级视图动画 */
+        .hierarchy-view-item {
+            animation: slideInFromLeft 0.3s ease-out;
+        }
+
+        .hierarchy-view-item:nth-child(1) { animation-delay: 0.1s; }
+        .hierarchy-view-item:nth-child(2) { animation-delay: 0.2s; }
+        .hierarchy-view-item:nth-child(3) { animation-delay: 0.3s; }
+        .hierarchy-view-item:nth-child(4) { animation-delay: 0.4s; }
+        .hierarchy-view-item:nth-child(5) { animation-delay: 0.5s; }
+    </style>
+</head>
+<body class="min-h-screen" style="background-color: #180536;">
+    <!-- 顶部导航栏 -->
+    <nav class="md-surface backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold" style="color: var(--md-on-surface);">分层状态机编辑器</h1>
+                    <span class="text-sm" style="color: var(--md-on-surface-variant);">Hierarchical State Machine Editor</span>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <button id="undoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                    <button id="redoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
+                    <button id="importBtn" class="md-surface-variant px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface);">
+                        <i class="fas fa-upload mr-2"></i>导入 Import
+                    </button>
+                    <button id="exportBtn" class="md-primary-btn px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-download mr-2"></i>导出 Export
+                    </button>
+                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
+                    <a href="../fsm/" class="md-surface-variant px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface); text-decoration: none;">
+                        <i class="fas fa-circle-nodes mr-2"></i>标准状态机
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex h-screen">
+        <!-- 左侧工具栏 -->
+        <div class="w-64 md-surface backdrop-blur-md p-4">
+            <div class="space-y-6">
+                <!-- 工具箱 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">工具箱</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="addStateBtn" class="tool-btn md-secondary-btn p-3 rounded-lg transition-all duration-200">
+                            <i class="fas fa-circle-plus text-lg mb-1"></i>
+                            <div class="text-xs font-medium">添加状态</div>
+                        </button>
+                        <button id="addTransitionBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-success);">
+                            <i class="fas fa-arrow-right text-lg mb-1"></i>
+                            <div class="text-xs font-medium">添加转换</div>
+                        </button>
+                        <button id="addChildStateBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);">
+                            <i class="fas fa-sitemap text-lg mb-1"></i>
+                            <div class="text-xs font-medium">添加子状态</div>
+                        </button>
+                        <button id="autoLayoutBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-warning);">
+                            <i class="fas fa-project-diagram text-lg mb-1"></i>
+                            <div class="text-xs font-medium">自动布局</div>
+                        </button>
+                        <button id="simulateBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-tertiary);">
+                            <i class="fas fa-play text-lg mb-1"></i>
+                            <div class="text-xs font-medium">模拟运行</div>
+                        </button>
+                        <button id="resetBtn" class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: var(--md-error);">
+                            <i class="fas fa-refresh text-lg mb-1"></i>
+                            <div class="text-xs font-medium">重置</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 状态层次结构 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">状态层次结构</h3>
+                    <div id="statesList" class="space-y-2 max-h-64 overflow-y-auto">
+                        <!-- 动态生成状态层次结构 -->
+                    </div>
+                </div>
+
+                <!-- 属性面板 -->
+                <div id="propertiesPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">属性面板</h3>
+                    <div id="selectedElementInfo" class="text-sm" style="color: var(--md-on-surface-variant);">
+                        点击状态或转换查看属性
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主编辑区域 -->
+        <div class="flex-1 relative">
+            <!-- 画布工具栏 -->
+            <div class="absolute top-4 left-4 z-10 flex space-x-2">
+                <button id="zoomInBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button id="zoomOutBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button id="fitToScreenBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button id="expandAllBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-expand-arrows-alt"></i>
+                </button>
+                <button id="collapseAllBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: var(--md-on-surface);">
+                    <i class="fas fa-compress-arrows-alt"></i>
+                </button>
+            </div>
+
+            <!-- 分层状态机画布 -->
+            <div id="hierarchicalCanvas" class="w-full h-full canvas-grid relative overflow-hidden" style="background-color: rgba(24, 5, 54, 0.6); cursor: grab;">
+                <svg id="hierarchicalSvgCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;">
+                    <defs>
+                        <!-- 分层状态机箭头 -->
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#00d4aa" />
+                        </marker>
+                        
+                        <!-- 连线渐变 -->
+                        <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#00D4AA;stop-opacity:0.9" />
+                            <stop offset="50%" style="stop-color:#00E5BB;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#00F2CC;stop-opacity:0.9" />
+                        </linearGradient>
+                        
+                        <!-- 发光效果 -->
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge> 
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                </svg>
+                
+                <!-- 分层状态节点容器 -->
+                <div id="hierarchicalStatesContainer" class="absolute inset-0 pointer-events-auto">
+                    <!-- 动态生成分层状态节点 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧信息面板 -->
+        <div class="w-80 md-surface backdrop-blur-md p-4">
+            <div class="space-y-6">
+                <!-- 统计信息 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">统计信息</h3>
+                    <div class="md-surface-variant rounded-lg p-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #4CAF50;" id="statesCount">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">状态数量</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #FF9800;" id="transitionsCount">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">转换数量</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #2196F3;" id="levelsCount">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">层级数量</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #9C27B0;" id="compositeCount">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">复合状态</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 层级视图 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">层级视图</h3>
+                    <div id="hierarchyView" class="md-surface-variant rounded-lg p-4 max-h-64 overflow-y-auto">
+                        <!-- 动态生成层级视图 -->
+                    </div>
+                </div>
+
+                <!-- 模拟控制 -->
+                <div id="simulationPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">模拟控制</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">当前状态路径</label>
+                            <div id="currentState" class="md-surface px-3 py-2 rounded text-sm">未开始</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">输入事件</label>
+                            <input id="eventInput" type="text" class="w-full px-3 py-2 md-surface rounded-lg text-sm" placeholder="输入事件名称" style="color: var(--md-on-surface);">
+                        </div>
+                        <button id="triggerEventBtn" class="w-full md-primary-btn py-2 rounded-lg transition-colors">
+                            触发事件
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框 -->
+    <div id="modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+        <div class="md-surface rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="modalTitle" class="text-lg font-semibold" style="color: var(--md-on-surface);"></h3>
+                    <button id="closeModal" class="transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="modalContent">
+                    <!-- 动态内容 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { HierarchicalStateMachineEditorModern } from './HierarchicalStateMachineEditor.js';
+        
+        // 初始化编辑器
+        window.addEventListener('DOMContentLoaded', () => {
+            const editor = new HierarchicalStateMachineEditorModern();
+            editor.init();
+            
+            // 将编辑器实例暴露到全局，方便调试
+            window.hierarchicalEditor = editor;
+        });
+    </script>
+</body>
+</html> 

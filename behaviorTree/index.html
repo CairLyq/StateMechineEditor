@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行为树编辑器 - Behavior Tree Editor</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="apple-touch-icon" href="../favicon.ico">
+    
+    <!-- TailwindCSS CDN -->
+    <script src="../lib/tailwindcss.3.4.16.js"></script>
+    
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            /* Material Design 3 Color System */
+            --md-primary: #180536;
+            --md-primary-container: #3d1960;
+            --md-on-primary: #ffffff;
+            --md-on-primary-container: #e8ddff;
+            
+            --md-secondary: #67089c;
+            --md-secondary-container: #8a2be2;
+            --md-on-secondary: #ffffff;
+            --md-on-secondary-container: #f0e8ff;
+            
+            --md-tertiary: #7c5295;
+            --md-tertiary-container: #9d73b6;
+            --md-on-tertiary: #ffffff;
+            --md-on-tertiary-container: #f5f0ff;
+            
+            --md-surface: rgba(255, 255, 255, 0.12);
+            --md-surface-variant: rgba(255, 255, 255, 0.15);
+            --md-on-surface: #ffffff;
+            --md-on-surface-variant: #e0e0e0;
+            
+            --md-surface-container-lowest: rgba(255, 255, 255, 0.02);
+            --md-surface-container-low: rgba(255, 255, 255, 0.04);
+            --md-surface-container: rgba(255, 255, 255, 0.06);
+            --md-surface-container-high: rgba(255, 255, 255, 0.08);
+            --md-surface-container-highest: rgba(255, 255, 255, 0.12);
+            
+            --md-outline: rgba(147, 143, 153, 0.4);
+            --md-outline-variant: rgba(73, 69, 79, 0.4);
+            
+            --md-error: #ffb4ab;
+            --md-error-container: #93000a;
+            --md-on-error: #690005;
+            --md-on-error-container: #ffdad6;
+            
+            --md-success: #4caf50;
+            --md-success-container: #1b5e20;
+            --md-on-success: #ffffff;
+            --md-on-success-container: #c8e6c9;
+            
+            --md-warning: #ff9800;
+            --md-warning-container: #e65100;
+            --md-on-warning: #ffffff;
+            --md-on-warning-container: #fff3e0;
+        }
+        
+        html, body {
+            font-family: 'Inter', sans-serif;
+            color: var(--md-on-surface);
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* 禁用所有滚动条 */
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        *::-webkit-scrollbar {
+            display: none;
+        }
+        
+        html, body, * {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        /* 内部滚动容器保持功能但隐藏滚动条 */
+        .max-h-48.overflow-y-auto,
+        .max-h-32.overflow-y-auto,
+        .max-h-64.overflow-y-auto,
+        .h-48.overflow-y-auto {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .max-h-48.overflow-y-auto::-webkit-scrollbar,
+        .max-h-32.overflow-y-auto::-webkit-scrollbar,
+        .max-h-64.overflow-y-auto::-webkit-scrollbar,
+        .h-48.overflow-y-auto::-webkit-scrollbar {
+            display: none;
+        }
+        
+        .behavior-node {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .behavior-node:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(103, 8, 156, 0.3);
+        }
+        
+        .node-connection {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* 画布网格背景 */
+        .canvas-grid {
+            background-image: 
+                /* 粗网格线 (每120px一条，即每10个细网格，主要分割线) */
+                linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                /* 细网格线 (每12px一条，辅助网格) */
+                linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            background-size: 
+                120px 120px,
+                120px 120px,
+                12px 12px,
+                12px 12px;
+            background-position: 
+                0 0,
+                0 0,
+                0 0,
+                0 0;
+        }
+
+        /* 网格跟随缩放和平移 */
+        .canvas-grid-container {
+            background-attachment: local;
+        }
+        
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            background: var(--md-surface-container);
+        }
+        
+        .md-surface {
+            background: var(--md-surface-container);
+            color: var(--md-on-surface);
+            border: 1px solid var(--md-outline-variant);
+        }
+        
+        .md-primary-btn {
+            background: var(--md-primary);
+            color: #ffffff !important;
+            border: none;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .md-primary-btn:hover {
+            background: var(--md-primary-container);
+            box-shadow: 0 4px 12px rgba(24, 5, 54, 0.4);
+            color: #ffffff !important;
+        }
+        
+        .md-secondary-btn {
+            background: var(--md-secondary);
+            color: #ffffff !important;
+            border: none;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .md-secondary-btn:hover {
+            background: var(--md-secondary-container);
+            box-shadow: 0 4px 12px rgba(103, 8, 156, 0.4);
+            color: #ffffff !important;
+        }
+        
+        .md-surface-variant {
+            background: var(--md-surface-variant);
+            color: var(--md-on-surface-variant);
+        }
+        
+        /* 提高输入框对比度 */
+        input[type="text"], input[type="range"], textarea, select {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #1a1a1a !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+        }
+        
+        input[type="text"]:focus, textarea:focus, select:focus {
+            background: rgba(255, 255, 255, 1) !important;
+            color: #000000 !important;
+            border: 2px solid #4caf50 !important;
+            outline: none !important;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2) !important;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .tool-btn {
+            transition: all 0.2s ease;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .tool-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .status-indicator {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .log-panel {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* 右键菜单样式 */
+        .context-menu {
+            position: fixed;
+            z-index: 9999;
+            background: var(--md-surface-container-high);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            min-width: 200px;
+            max-width: 280px;
+            overflow: hidden;
+            opacity: 0;
+            transform: scale(0.95);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+        
+        .context-menu.show {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: all;
+        }
+        
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            color: var(--md-on-surface);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .context-menu-item:hover {
+            background: var(--md-surface-container-highest);
+            color: var(--md-primary);
+        }
+        
+        .context-menu-item:active {
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+        }
+        
+        .context-menu-item.disabled {
+            color: var(--md-outline);
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .context-menu-item.disabled:hover {
+            background: none;
+            color: var(--md-outline);
+        }
+        
+        .context-menu-item.danger:hover {
+            background: var(--md-error-container);
+            color: var(--md-on-error-container);
+        }
+        
+        .context-menu-separator {
+            height: 1px;
+            background: var(--md-outline-variant);
+            margin: 4px 0;
+        }
+        
+        .context-menu-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .context-menu-text {
+            flex: 1;
+        }
+        
+        .context-menu-shortcut {
+            color: var(--md-outline);
+            font-size: 12px;
+            margin-left: 12px;
+        }
+        
+        .context-menu-submenu {
+            position: relative;
+        }
+        
+        .context-menu-submenu::after {
+            content: '\f054';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 10px;
+            color: var(--md-outline);
+            margin-left: auto;
+        }
+        
+        /* 子菜单 */
+        .context-submenu {
+            position: absolute;
+            left: 100%;
+            top: 0;
+            background: var(--md-surface-container-high);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--md-outline-variant);
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            min-width: 180px;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+        }
+        
+        .context-menu-submenu:hover .context-submenu {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: all;
+        }
+        
+        /* 消息提示动画 */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        /* Toast 样式 */
+        .toast {
+            background: var(--md-surface);
+            color: var(--md-on-surface);
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateX(100%);
+            opacity: 0;
+            animation: toast-enter 0.3s ease-out forwards;
+            border-left: 4px solid var(--md-primary);
+        }
+
+        .toast-exit {
+            animation: toast-exit 0.3s ease-in forwards;
+        }
+
+        @keyframes toast-enter {
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes toast-exit {
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        /* 改进统计信息文本对比度 */
+        .text-2xl.font-bold {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* 改善次要文本的对比度 */
+        [style*="color: var(--md-on-surface-variant)"] {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* 改善按钮文本对比度 */
+        button[style*="color: var(--md-on-surface-variant)"] {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* 改善图标对比度 */
+        .fas, .fab, .far {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* 改善搜索和模板面板的文本对比度 */
+        #searchPanel, #templatesPanel, #performancePanel {
+            color: #ffffff;
+        }
+        
+        #searchPanel input, #templatesPanel input, #performancePanel input {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #1a1a1a !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+        }
+        
+        #searchPanel select, #templatesPanel select, #performancePanel select {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #1a1a1a !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+        }
+        
+        /* 改善工具箱按钮的对比度 */
+        .tool-btn[data-node-type="parallel"],
+        .tool-btn[data-node-type="action"],
+        .tool-btn[data-node-type="condition"] {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        .tool-btn[data-node-type="parallel"]:hover,
+        .tool-btn[data-node-type="action"]:hover,
+        .tool-btn[data-node-type="condition"]:hover {
+            background: rgba(255, 255, 255, 0.2) !important;
+            transform: translateY(-2px);
+        }
+        
+        /* 改善所有工具箱按钮的对比度 */
+        .tool-btn[data-node-type="sequence"],
+        .tool-btn[data-node-type="inverter"] {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        .tool-btn[data-node-type="sequence"]:hover,
+        .tool-btn[data-node-type="inverter"]:hover {
+            background: rgba(255, 255, 255, 0.2) !important;
+            transform: translateY(-2px);
+        }
+        
+        /* 改善执行控制按钮的对比度 */
+        #stepBtn {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        #stepBtn:hover {
+            background: rgba(255, 255, 255, 0.2) !important;
+            transform: translateY(-1px);
+        }
+        
+        /* 改善所有执行控制按钮的对比度 */
+        #pauseBtn, #stopBtn {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        #pauseBtn:hover, #stopBtn:hover {
+            background: rgba(255, 255, 255, 0.2) !important;
+            transform: translateY(-1px);
+        }
+        
+        /* 增强按钮文本的可见性 */
+        .tool-btn[data-node-type="parallel"] .text-xs,
+        .tool-btn[data-node-type="action"] .text-xs,
+        .tool-btn[data-node-type="condition"] .text-xs,
+        #stepBtn .text-xs {
+            font-weight: 600 !important;
+            letter-spacing: 0.5px;
+        }
+        
+        /* 增强所有工具箱按钮文本的可见性 */
+        .tool-btn[data-node-type="sequence"] .text-xs,
+        .tool-btn[data-node-type="inverter"] .text-xs {
+            font-weight: 600 !important;
+            letter-spacing: 0.5px;
+        }
+        
+        /* 增强执行控制按钮文本的可见性 */
+        #pauseBtn .text-xs,
+        #stopBtn .text-xs {
+            font-weight: 600 !important;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body class="min-h-screen" style="background-color: #180536;">
+    <!-- 顶部导航栏 -->
+    <nav class="md-surface backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold" style="color: var(--md-on-surface);">行为树编辑器</h1>
+                    <span class="text-sm" style="color: var(--md-on-surface-variant);">Behavior Tree Editor</span>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <button id="undoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                    <button id="redoBtn" class="p-2 transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-secondary)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
+                    <button id="importBtn" class="md-surface-variant px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface);">
+                        <i class="fas fa-upload mr-2"></i>导入 Import
+                    </button>
+                    <div class="w-px h-6" style="background-color: var(--md-outline);"></div>
+                    <button id="exportBtn" class="md-primary-btn px-4 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-download mr-2"></i>导出 Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex h-screen">
+        <!-- 左侧工具栏 -->
+        <div class="w-64 md-surface backdrop-blur-md p-4">
+            <div class="space-y-6">
+                <!-- 工具箱 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">工具箱</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="tool-btn md-secondary-btn p-3 rounded-lg transition-all duration-200" data-node-type="selector">
+                            <i class="fas fa-code-branch text-lg mb-1"></i>
+                            <div class="text-xs font-medium">选择器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: #4CAF50; font-weight: 600;" data-node-type="sequence">
+                            <i class="fas fa-list-ol text-lg mb-1"></i>
+                            <div class="text-xs font-medium">序列器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: #E91E63; font-weight: 600;" data-node-type="parallel">
+                            <i class="fas fa-grip-lines text-lg mb-1"></i>
+                            <div class="text-xs font-medium">并行器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: #FF9800; font-weight: 600;" data-node-type="inverter">
+                            <i class="fas fa-exchange-alt text-lg mb-1"></i>
+                            <div class="text-xs font-medium">反转器</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: #2196F3; font-weight: 600;" data-node-type="action">
+                            <i class="fas fa-play text-lg mb-1"></i>
+                            <div class="text-xs font-medium">动作节点</div>
+                        </button>
+                        <button class="tool-btn md-surface-variant p-3 rounded-lg transition-all duration-200" style="color: #9C27B0; font-weight: 600;" data-node-type="condition">
+                            <i class="fas fa-question-circle text-lg mb-1"></i>
+                            <div class="text-xs font-medium">条件节点</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 属性面板 -->
+                <div id="propertiesPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">节点属性</h3>
+                    <div id="selectedNodeInfo" class="text-sm" style="color: var(--md-on-surface-variant);">
+                        点击节点查看属性
+                    </div>
+                </div>
+
+                <!-- 节点列表 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">节点列表</h3>
+                    <div id="nodesList" class="space-y-2 max-h-48 overflow-y-auto">
+                        <!-- 动态生成节点列表 -->
+                    </div>
+                </div>
+
+                <!-- 黑板数据 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">黑板数据</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <button id="addBlackboardBtn" class="text-xs transition-colors bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded">
+                            <i class="fas fa-plus mr-1"></i>添加数据
+                        </button>
+                        <button id="clearBlackboardBtn" class="text-xs transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                            <i class="fas fa-trash mr-1"></i>清空
+                        </button>
+                    </div>
+                    <div id="blackboardDataSection" class="md-surface-variant rounded-lg p-3 max-h-32 overflow-y-auto text-sm">
+                        <div class="text-center" style="color: var(--md-on-surface-variant);">
+                            暂无数据
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主编辑区域 -->
+        <div class="flex-1 relative">
+            <!-- 画布工具栏 -->
+            <div class="absolute top-4 left-4 z-10 flex space-x-2">
+                <button id="refreshBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #67089c; text-shadow: 0 1px 2px rgba(103, 8, 156, 0.3);" title="刷新画布">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button id="searchBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);" title="搜索节点">
+                    <i class="fas fa-search"></i>
+                </button>
+                <button id="templatesBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #7c5295; text-shadow: 0 1px 2px rgba(124, 82, 149, 0.3);" title="节点模板">
+                    <i class="fas fa-layer-group"></i>
+                </button>
+                <button id="zoomInBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);" title="放大">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button id="zoomOutBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);" title="缩小">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button id="fitBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);" title="适应画布">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button id="deleteBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #f44336; text-shadow: 0 1px 2px rgba(244, 67, 54, 0.3);" title="删除选中">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button id="autoSaveBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);" title="自动保存">
+                    <i class="fas fa-save"></i>
+                </button>
+                <button id="performanceBtn" class="md-surface backdrop-blur-md p-2 rounded-lg shadow-sm transition-colors" style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);" title="性能监控">
+                    <i class="fas fa-chart-line"></i>
+                </button>
+            </div>
+
+            <!-- 搜索面板 -->
+            <div id="searchPanel" class="absolute top-4 left-1/2 transform -translate-x-1/2 z-20 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-4 w-96">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium" style="color: var(--md-on-surface);">搜索节点</h3>
+                        <button id="closeSearchBtn" class="text-white hover:text-gray-300 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <input type="text" id="searchInput" placeholder="输入节点名称或类型..." 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div class="flex space-x-2">
+                            <select id="nodeTypeFilter" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">所有类型</option>
+                                <option value="selector">选择器</option>
+                                <option value="sequence">序列器</option>
+                                <option value="parallel">并行器</option>
+                                <option value="action">动作节点</option>
+                                <option value="condition">条件节点</option>
+                            </select>
+                            <select id="nodeStatusFilter" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">所有状态</option>
+                                <option value="ready">准备</option>
+                                <option value="running">运行中</option>
+                                <option value="success">成功</option>
+                                <option value="failure">失败</option>
+                            </select>
+                        </div>
+                        <div id="searchResults" class="max-h-48 overflow-y-auto">
+                            <!-- 搜索结果 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 模板面板 -->
+            <div id="templatesPanel" class="absolute top-4 right-4 z-20 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-4 w-80">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium" style="color: var(--md-on-surface);">节点模板</h3>
+                        <button id="closeTemplatesBtn" class="text-white hover:text-gray-300 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex space-x-2">
+                            <select id="templateCategoryFilter" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">所有分类</option>
+                                <option value="AI">AI</option>
+                                <option value="NPC">NPC</option>
+                                <option value="Automation">自动化</option>
+                                <option value="State Management">状态管理</option>
+                                <option value="Utility">工具</option>
+                            </select>
+                            <button id="saveTemplateBtn" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                <i class="fas fa-save"></i>
+                            </button>
+                        </div>
+                        <div id="templatesList" class="max-h-64 overflow-y-auto space-y-2">
+                            <!-- 模板列表 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 性能监控面板 -->
+            <div id="performancePanel" class="absolute bottom-4 right-4 z-20 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-4 w-64">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium" style="color: var(--md-on-surface);">性能监控</h3>
+                        <button id="closePerformanceBtn" class="text-white hover:text-gray-300 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>FPS:</span>
+                            <span id="fpsDisplay">60</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>节点数:</span>
+                            <span id="nodeCountDisplay">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>渲染时间:</span>
+                            <span id="renderTimeDisplay">0ms</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>内存使用:</span>
+                            <span id="memoryUsageDisplay">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>树深度:</span>
+                            <span id="treeDepthDisplay">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 行为树画布 -->
+            <div id="canvas" class="w-full h-full canvas-grid relative overflow-hidden cursor-crosshair" style="background-color: rgba(24, 5, 54, 0.6);">
+                <canvas id="behaviorTreeCanvas" class="w-full h-full absolute inset-0" style="min-width: 100%; min-height: 100%;"></canvas>
+                
+                <!-- 节点容器 -->
+                <div id="nodesContainer" class="absolute inset-0 pointer-events-none">
+                    <!-- 动态生成节点 -->
+                </div>
+            </div>
+
+            <!-- 执行状态指示器 -->
+            <div id="executionStatus" class="absolute top-4 right-4 hidden">
+                <div class="md-surface backdrop-blur-md rounded-lg shadow-lg p-3 border-l-4 border-green-500">
+                    <div class="flex items-center">
+                        <div class="status-indicator w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                        <span class="text-sm font-medium" style="color: var(--md-on-surface);">正在执行...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧信息面板 -->
+        <div class="w-80 md-surface backdrop-blur-md p-4">
+            <div class="space-y-6">
+                <!-- 统计信息 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">统计信息</h3>
+                    <div class="md-surface-variant rounded-lg p-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #4CAF50; text-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);" id="totalNodes">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">节点总数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold" style="color: #FF9800; text-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);" id="treeDepth">0</div>
+                                <div class="text-xs" style="color: var(--md-on-surface-variant);">树深度</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行控制 -->
+                <div id="executionPanel" class="md-surface-variant rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">执行控制</h3>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="playBtn" class="md-secondary-btn p-2 rounded-lg transition-colors">
+                                <i class="fas fa-play text-sm mr-1"></i>
+                                <span class="text-xs">运行</span>
+                            </button>
+                            <button id="pauseBtn" class="md-surface-variant p-2 rounded-lg transition-colors" style="color: #FF9800; font-weight: 600;">
+                                <i class="fas fa-pause text-sm mr-1"></i>
+                                <span class="text-xs">暂停</span>
+                            </button>
+                            <button id="stopBtn" class="md-surface-variant p-2 rounded-lg transition-colors" style="color: #f44336; font-weight: 600;">
+                                <i class="fas fa-stop text-sm mr-1"></i>
+                                <span class="text-xs">停止</span>
+                            </button>
+                            <button id="stepBtn" class="md-surface-variant p-2 rounded-lg transition-colors" style="color: #00BCD4; font-weight: 600;">
+                                <i class="fas fa-step-forward text-sm mr-1"></i>
+                                <span class="text-xs">单步</span>
+                            </button>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">执行状态</label>
+                            <div id="executionState" class="md-surface px-3 py-2 rounded text-sm">未开始</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" style="color: var(--md-on-surface);">执行速度</label>
+                            <input id="speedControl" type="range" min="0.1" max="2" step="0.1" value="1" class="w-full">
+                            <div class="text-xs text-center mt-1" style="color: var(--md-on-surface-variant);" id="speedValue">1.0x</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行日志 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" style="color: var(--md-on-surface);">执行日志</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <button id="clearLogBtn" class="text-xs transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                            <i class="fas fa-trash mr-1"></i>清空日志
+                        </button>
+                    </div>
+                    <div id="executionLog" class="log-panel h-48 p-3 rounded-lg text-xs overflow-y-auto">
+                        <div class="text-green-400">行为树编辑器已就绪...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 文件输入（隐藏） -->
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+    
+    <!-- 行为树节点模块 -->
+    <script src="nodes/BaseNode.js"></script>
+    <script src="nodes/RootNode.js"></script>
+    <script src="nodes/SelectorNode.js"></script>
+    <script src="nodes/SequenceNode.js"></script>
+    <script src="nodes/ParallelNode.js"></script>
+    <script src="nodes/InverterNode.js"></script>
+    <script src="nodes/RepeaterNode.js"></script>
+    <script src="nodes/ActionNode.js"></script>
+    <script src="nodes/ConditionNode.js"></script>
+    <script src="nodes/NodeFactory.js"></script>
+    <script src="nodes/index.js"></script>
+    
+    <script src="BehaviorTreeRenderer.js"></script>
+    <script src="BehaviorTreeSimulator.js"></script>
+    <script src="BehaviorTreeTemplates.js"></script>
+    <script src="BehaviorTreeEditor.js"></script>
+    
+    <!-- 引入UI管理器 -->
+    <script src="BehaviorTreeUI.js"></script>
+
+    <!-- 右键菜单 -->
+    <div id="contextMenu" class="context-menu">
+        <!-- 动态生成菜单项 -->
+    </div>
+
+    <!-- MD3风格模态框 -->
+    <div id="modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+        <div class="md-surface rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="modalTitle" class="text-lg font-semibold" style="color: var(--md-on-surface);"></h3>
+                    <button id="closeModal" class="transition-colors" style="color: var(--md-on-surface-variant);" onmouseover="this.style.color='var(--md-on-surface)'" onmouseout="this.style.color='var(--md-on-surface-variant)'">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="modalContent">
+                    <!-- 动态内容 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div id="confirmDialog" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+        <div class="md-surface rounded-xl shadow-2xl max-w-sm w-full mx-4 transform transition-all duration-300">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center mr-4" style="background: var(--md-warning-container);">
+                        <i class="fas fa-question-circle text-xl" style="color: var(--md-on-warning-container);"></i>
+                    </div>
+                    <h3 id="confirmTitle" class="text-lg font-semibold" style="color: var(--md-on-surface);">确认操作</h3>
+                </div>
+                <p id="confirmMessage" class="text-sm mb-6" style="color: var(--md-on-surface-variant);"></p>
+                <div class="flex space-x-3 justify-end">
+                    <button id="confirmCancel" class="px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface-variant); background: var(--md-surface-variant);">
+                        取消
+                    </button>
+                    <button id="confirmOk" class="md-primary-btn px-4 py-2 rounded-lg transition-colors">
+                        确认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 输入对话框 -->
+    <div id="inputDialog" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+        <div class="md-surface rounded-xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center mr-4" style="background: var(--md-primary-container);">
+                        <i class="fas fa-edit text-xl" style="color: var(--md-on-primary-container);"></i>
+                    </div>
+                    <h3 id="inputTitle" class="text-lg font-semibold" style="color: var(--md-on-surface);"></h3>
+                </div>
+                <div class="mb-6">
+                    <label id="inputLabel" class="block text-sm font-medium mb-2" style="color: var(--md-on-surface);"></label>
+                    <input id="inputField" type="text" class="w-full px-3 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent" style="background: rgba(255, 255, 255, 0.95); color: #1a1a1a; border-color: var(--md-outline);">
+                </div>
+                <div class="flex space-x-3 justify-end">
+                    <button id="inputCancel" class="px-4 py-2 rounded-lg transition-colors" style="color: var(--md-on-surface-variant); background: var(--md-surface-variant);">
+                        取消
+                    </button>
+                    <button id="inputOk" class="md-primary-btn px-4 py-2 rounded-lg transition-colors">
+                        确认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

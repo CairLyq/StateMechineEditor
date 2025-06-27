@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>节点选中效果测试</title>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            font-family: Arial, sans-serif; 
+            background: #1a1a1a;
+            color: white;
+        }
+        #canvas { 
+            border: 1px solid #333; 
+            background: #2a2a2a;
+            display: block;
+            margin: 20px auto;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .info {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">行为树节点选中效果测试</h1>
+    
+    <div class="info">
+        点击节点测试选中效果，按Ctrl+点击进行多选
+    </div>
+    
+    <canvas id="testCanvas" width="800" height="600"></canvas>
+    
+    <div class="controls">
+        <button onclick="testSelection()">测试选中效果</button>
+        <button onclick="clearSelection()">清空选择</button>
+        <button onclick="selectAll()">全选</button>
+    </div>
+    
+    <div id="selectedInfo" class="info">
+        当前选中: 无
+    </div>
+
+    <script src="nodes/BaseNode.js"></script>
+    <script src="nodes/ActionNode.js"></script>
+    <script src="nodes/ConditionNode.js"></script>
+    <script src="nodes/SelectorNode.js"></script>
+    <script src="nodes/SequenceNode.js"></script>
+    <script src="nodes/NodeFactory.js"></script>
+    <script src="BehaviorTreeRenderer.js"></script>
+    <script src="BehaviorTreeEditor.js"></script>
+    
+    <script>
+        // 创建测试编辑器
+        const editor = new BehaviorTreeEditor('testCanvas', {
+            debug: true,
+            autoSave: false
+        });
+        
+        // 创建一些测试节点
+        function createTestNodes() {
+            const root = editor.addNode('selector', 100, 100);
+            const action1 = editor.addNode('action', 50, 200);
+            const action2 = editor.addNode('action', 150, 200);
+            const condition = editor.addNode('condition', 250, 200);
+            
+            // 设置节点名称
+            root.name = '根选择器';
+            action1.name = '动作1';
+            action2.name = '动作2';
+            condition.name = '条件检查';
+            
+            // 连接节点
+            editor.connectNodes(root, action1);
+            editor.connectNodes(root, action2);
+            editor.connectNodes(root, condition);
+            
+            editor.tree.root = root;
+            editor.render();
+        }
+        
+        // 测试选中效果
+        function testSelection() {
+            const nodes = Array.from(editor.tree.nodes.values());
+            if (nodes.length > 0) {
+                editor.clearSelection();
+                setTimeout(() => {
+                    editor.selectNode(nodes[0]);
+                    updateSelectedInfo();
+                }, 100);
+            }
+        }
+        
+        // 清空选择
+        function clearSelection() {
+            editor.clearSelection();
+            updateSelectedInfo();
+        }
+        
+        // 全选
+        function selectAll() {
+            editor.selectAll();
+            updateSelectedInfo();
+        }
+        
+        // 更新选中信息显示
+        function updateSelectedInfo() {
+            const selectedCount = editor.state.selectedNodes.size;
+            const infoDiv = document.getElementById('selectedInfo');
+            
+            if (selectedCount === 0) {
+                infoDiv.textContent = '当前选中: 无';
+            } else if (selectedCount === 1) {
+                const node = Array.from(editor.state.selectedNodes)[0];
+                infoDiv.textContent = `当前选中: ${node.name || node.type}`;
+            } else {
+                infoDiv.textContent = `当前选中: ${selectedCount} 个节点`;
+            }
+        }
+        
+        // 监听选中状态变化
+        const originalSelectNode = editor.selectNode.bind(editor);
+        const originalClearSelection = editor.clearSelection.bind(editor);
+        
+        editor.selectNode = function(node) {
+            originalSelectNode(node);
+            updateSelectedInfo();
+        };
+        
+        editor.clearSelection = function() {
+            originalClearSelection();
+            updateSelectedInfo();
+        };
+        
+        // 初始化测试节点
+        createTestNodes();
+        updateSelectedInfo();
+        
+        console.log('节点选中效果测试页面已加载');
+        console.log('编辑器实例:', editor);
+    </script>
+</body>
+</html> 
